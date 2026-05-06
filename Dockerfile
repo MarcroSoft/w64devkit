@@ -271,6 +271,7 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-libstdcxx-verbose \
         --disable-dependency-tracking \
         --disable-nls \
+        --disable-lto \
         --disable-multilib \
         CFLAGS_FOR_TARGET="-O2" \
         CXXFLAGS_FOR_TARGET="-O2" \
@@ -438,6 +439,7 @@ RUN echo 'BEGIN {print "pecoff"}' \
         --enable-version-specific-runtime-libs \
         --disable-libstdcxx-verbose \
         --disable-dependency-tracking \
+        --disable-lto \
         --disable-multilib \
         --disable-nls \
         --disable-win32-registry \
