@@ -103,8 +103,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xzf make-$MAKE_VERSION.tar.gz -C make --strip-components=1
 
 FROM base AS dl-busybox
-ARG BUSYBOX_VERSION=FRP-5857-g3681e397f \
-    BUSYBOX_SHA256=3a1b3ecc813036d1be42aa71e8c4da9e2c8d9d1d6203d99e48a831b7a6647145
+ARG BUSYBOX_VERSION=FRP-6075-g169694ebd \
+    BUSYBOX_SHA256=44401413c86a839deeec3eba088af244a1594f18ff9fd0622811100e4cc2e7b4
 WORKDIR /dl
 RUN curl --insecure --location --remote-name-all --remote-header-name \
     https://frippery.org/files/busybox/busybox-w32-$BUSYBOX_VERSION.tgz \
@@ -146,8 +146,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xzf zstd-$ZSTD_VERSION.tar.gz -C zstd --strip-components=1
 
 FROM base AS dl-ccache
-ARG CCACHE_VERSION=4.13.4 \
-    CCACHE_SHA256=4a7ef278b39d031b9ec524c0778d24bdb3e761940ed368060b54594f15559537 \
+ARG CCACHE_VERSION=4.13.6 \
+    CCACHE_SHA256=a7de667ca08cf67c3c8af9f213f6aa701a1188a2b3163fb74483858ce5e79fbb \
     XXHASH_VERSION=0.8.3 \
     XXHASH_SHA256=aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80
 WORKDIR /dl
@@ -507,6 +507,12 @@ RUN ./configure \
  && $ARCH-gcc -nostartfiles -Oz -s -o /out/bin/uuidgen.exe \
         $PREFIX/src/uuidgen.c -lmemory
 
+FROM cross AS build-quilt
+COPY src/quilt.cpp $PREFIX/src/
+RUN mkdir -p /out/bin \
+ && $ARCH-g++ -std=c++20 -O2 -fno-exceptions -s \
+        -o /out/bin/quilt.exe $PREFIX/src/quilt.cpp
+
 # Build PDCurses once and reuse it for both gdb and ccmake.
 FROM cross AS build-pdcurses
 COPY --from=dl-pdcurses /dl/pdcurses /dl/pdcurses
@@ -589,6 +595,7 @@ RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
  && make mingw64u_defconfig \
  && sed -ri 's/^(CONFIG_AR)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_ASCII)=y/\1=n/' .config \
+ && sed -ri 's/^(CONFIG_CRON\w*)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_DPKG\w*)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_FTP\w*)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_LINK)=y/\1=n/' .config \
@@ -600,6 +607,7 @@ RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
  && sed -ri 's/^(CONFIG_TEST2)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_TSORT)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_UNLINK)=y/\1=n/' .config \
+ && sed -ri 's/^(CONFIG_UUIDGEN)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_VI)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_XXD)=y/\1=n/' .config \
  && make -j$(nproc) CROSS_COMPILE=$ARCH- \
@@ -614,7 +622,7 @@ RUN $ARCH-gcc -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s \
       bzip2 cal cat chattr chmod cksum clear cmp comm cp cpio crc32 cut date \
       dc dd df diff dirname dos2unix du echo ed egrep env expand expr factor \
       false fgrep find fold free fsync getopt grep groups gunzip gzip hd \
-      head hexdump httpd iconv id inotifyd install ipcalc jn kill killall \
+      head hexdump httpd iconv id inotifyd install ipcalc jn join kill killall \
       lash less ln logname ls lsattr lzcat lzma lzop lzopcat md5sum mkdir \
       mktemp mv nc nl nproc od paste patch pgrep pidof pipe_progress pkill \
       printenv printf ps pwd readlink realpath reset rev rm rmdir sed seq sh \
@@ -834,6 +842,7 @@ FROM cross AS final
 ARG VERSION
 
 COPY --from=build-gendef /out/ $PREFIX/
+COPY --from=build-quilt /out/ $PREFIX/
 COPY --from=build-gdb /out/ $PREFIX/
 COPY --from=build-make /out/ $PREFIX/
 COPY --from=build-busybox /out/ $PREFIX/
@@ -878,8 +887,6 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
         -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
         -s -nostdlib -o $PREFIX/bin/recycle.exe $PREFIX/src/recycle.c \
         -lkernel32 -lshell32 -lmemory \
- && $ARCH-g++ -std=c++20 -O2 -fno-exceptions -s -o $PREFIX/bin/quilt.exe \
-        $PREFIX/src/quilt.cpp \
  && $ARCH-gcc -DEXE=pkg-config.exe -DCMD=pkg-config \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/$ARCH-pkg-config.exe $PREFIX/src/alias.c -lkernel32 \
