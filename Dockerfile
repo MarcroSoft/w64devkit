@@ -6,7 +6,8 @@ ARG PREFIX
 ENV PREFIX=$PREFIX
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-  build-essential cmake curl libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full
+  build-essential cmake curl libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full \
+  python3 scons
 
 COPY src/w64devkit.ico src/alias.c $PREFIX/src/
 
@@ -213,6 +214,16 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && mkdir aas-sign \
  && tar xzf aas-sign-$AAS_SIGN_VERSION.tar.gz -C aas-sign --strip-components=1
 
+FROM base AS dl-nsis
+ARG NSIS_VERSION=3.12 \
+    NSIS_SHA256=f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186
+WORKDIR /dl
+RUN curl --insecure --location --remote-name-all --remote-header-name \
+    https://downloads.sourceforge.net/project/nsis/NSIS%203/$NSIS_VERSION/nsis-$NSIS_VERSION-src.tar.bz2 \
+ && printf '%s  %s\n' $NSIS_SHA256 nsis-$NSIS_VERSION-src.tar.bz2 | sha256sum -c \
+ && mkdir nsis \
+ && tar xjf nsis-$NSIS_VERSION-src.tar.bz2 -C nsis --strip-components=1
+
 # Build cross-compiler
 
 FROM dl-cross AS cross
@@ -379,6 +390,14 @@ RUN /dl/mpc/configure \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
+
+WORKDIR /zlib
+RUN /dl/binutils/zlib/configure \
+        --host=$ARCH \
+        CFLAGS="-O2" \
+ && make -j$(nproc) libz.a \
+ && cp libz.a /deps/lib/ \
+ && cp /dl/binutils/zlib/zlib.h /dl/binutils/zlib/zconf.h /deps/include/
 
 WORKDIR /mingw-headers
 RUN /dl/mingw/mingw-w64-headers/configure \
@@ -595,8 +614,11 @@ RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
  && make mingw64u_defconfig \
  && sed -ri 's/^(CONFIG_AR)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_ASCII)=y/\1=n/' .config \
+ && sed -ri -e 's/^(CONFIG_BASH_IS_ASH)=y/\1=n/' \
+            -e 's/^# (CONFIG_BASH_IS_NONE) is not set/\1=y/' .config \
  && sed -ri 's/^(CONFIG_CRON\w*)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_DPKG\w*)=y/\1=n/' .config \
+ && sed -ri 's/^(CONFIG_FEATURE_FAIL_IF_UTF8_MANIFEST_UNSUPPORTED)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_FTP\w*)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_LINK)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_MAN)=y/\1=n/' .config \
@@ -618,7 +640,7 @@ RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
 # Create BusyBox command aliases (like "busybox --install")
 RUN $ARCH-gcc -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s \
       -nostdlib -o alias.exe $PREFIX/src/busybox-alias.c -lkernel32 \
- && printf '%s\n' arch ash awk base32 base64 basename bash bc bunzip2 bzcat \
+ && printf '%s\n' arch ash awk base32 base64 basename bc bunzip2 bzcat \
       bzip2 cal cat chattr chmod cksum clear cmp comm cp cpio crc32 cut date \
       dc dd df diff dirname dos2unix du echo ed egrep env expand expr factor \
       false fgrep find fold free fsync getopt grep groups gunzip gzip hd \
@@ -811,14 +833,48 @@ RUN sed -i s/CommCtrl/commctrl/ $(grep -Rl CommCtrl CPP/) \
 
 # aas-sign: native Linux x86_64 binary used at run time inside the
 # `signed` container. Built with the base image's Debian gcc (NOT the
-# cross compiler). mbedtls + nlohmann/json are vendored in the source
-# tarball, so no network or extra apt packages are required.
+# cross compiler).
 FROM base AS build-aas-sign
 COPY --from=dl-aas-sign /dl/aas-sign /dl/aas-sign
 RUN cmake -B /aas-sign-build -S /dl/aas-sign -DCMAKE_BUILD_TYPE=Release \
  && cmake --build /aas-sign-build -j$(nproc) \
  && mkdir -p /out/usr/local/bin \
  && cp /aas-sign-build/aas-sign /out/usr/local/bin/
+
+FROM cross AS build-aas-sign-w32
+COPY --from=dl-aas-sign /dl/aas-sign /dl/aas-sign
+RUN cmake -B /aas-sign-build-w32 -S /dl/aas-sign \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_C_COMPILER=$ARCH-gcc \
+        -DCMAKE_CXX_COMPILER=$ARCH-g++ \
+        -DCMAKE_RC_COMPILER=$ARCH-windres \
+        -DCMAKE_EXE_LINKER_FLAGS="-s" \
+ && cmake --build /aas-sign-build-w32 -j$(nproc) \
+ && mkdir -p /out$PREFIX/bin \
+ && cp /aas-sign-build-w32/aas-sign.exe /out$PREFIX/bin/
+
+FROM cross AS build-nsis
+COPY --from=dl-nsis /dl/nsis /dl/nsis
+COPY src/nsis-*.patch $PREFIX/src/
+WORKDIR /dl/nsis
+# Source/build.cpp ships with CRLF line endings; everything else in
+# the tree is LF. Strip the carriage returns so our LF patch applies.
+RUN sed -i 's/\r$//' Source/build.cpp \
+ && cat $PREFIX/src/nsis-*.patch | patch -p1 \
+ && scons -j$(nproc) \
+        XGCC_W32_PREFIX=$ARCH- \
+        TARGET_ARCH=amd64 \
+        PREFIX=$PREFIX \
+        PREFIX_BIN=$PREFIX/share/nsis/bin \
+        PREFIX_DATA=$PREFIX/share/nsis \
+        NSIS_CONFIG_CONST_DATA_PATH=no \
+        PREFIX_DEST=/out \
+        SKIPDOC=all \
+        SKIPUTILS="NSIS Menu,Makensisw,VPatch/Source/GenPat,MakeLangId,zip2exe" \
+        ZLIB_W32=/deps \
+        install-compiler install-stubs install-includes install-plugins \
+        install-contrib install-utils
 
 # Collect source tarballs
 FROM base AS source
@@ -835,6 +891,7 @@ COPY --from=dl-ninja /dl/*.* /source/
 COPY --from=dl-cmake /dl/*.* /source/
 COPY --from=dl-dcmake /dl/*.* /source/
 COPY --from=dl-7z /dl/*.* /source/
+COPY --from=dl-nsis /dl/*.* /source/
 
 # Pack up a release
 
@@ -854,6 +911,8 @@ COPY --from=build-ninja /out/ $PREFIX/
 COPY --from=build-dcmake /out/ $PREFIX/
 COPY --from=build-cmake /out$PREFIX/ $PREFIX/
 COPY --from=build-7z /dl/7z/7z.sfx /7z/
+COPY --from=build-nsis /out$PREFIX/ $PREFIX/
+COPY --from=build-aas-sign-w32 /out$PREFIX/ $PREFIX/
 
 COPY src $PREFIX/src
 COPY etc $PREFIX/etc
@@ -890,6 +949,9 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
  && $ARCH-gcc -DEXE=pkg-config.exe -DCMD=pkg-config \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/$ARCH-pkg-config.exe $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=../share/nsis/bin/makensis.exe -DCMD=makensis \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/makensis.exe $PREFIX/src/alias.c -lkernel32 \
  && sed -i s/'\<ARCH\>'/$ARCH/g $PREFIX/etc/profile \
  && mkdir -p $PREFIX/lib/pkgconfig \
  && cp /dl/mingw/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt \
