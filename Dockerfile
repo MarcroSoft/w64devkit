@@ -59,10 +59,10 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xjf mingw-w64-v$MINGW_VERSION.tar.bz2 -C mingw --strip-components=1
 
 FROM base AS dl-gdb
-ARG GDB_VERSION=17.1 \
-    GDB_SHA256=14996f5f74c9f68f5a543fdc45bca7800207f91f92aeea6c2e791822c7c6d876 \
-    EXPAT_VERSION=2.8.0 \
-    EXPAT_SHA256=a37bfae0aa9775bd8521ebd85dc456d486f0ff31138f6c91fd902ea732624542 \
+ARG GDB_VERSION=17.2 \
+    GDB_SHA256=1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c \
+    EXPAT_VERSION=2.8.1 \
+    EXPAT_SHA256=10b195ee78160a908388180a8fe3603d4e9a12f4755fbf5f3816b23a9d750da0 \
     LIBICONV_VERSION=1.19 \
     LIBICONV_SHA256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 WORKDIR /dl
