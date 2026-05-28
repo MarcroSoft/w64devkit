@@ -175,8 +175,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
-ARG CMAKE_VERSION=4.3.2 \
-    CMAKE_SHA256=b0231eb39b3c3cabdc568c619df78208a7bd95ea10c9b2236d61218bac1b367d
+ARG CMAKE_VERSION=4.3.3 \
+    CMAKE_SHA256=cba4bb7a44edf2877bb6f059932896383babe435b3a8c3b5df48b4aa41c9bb85
 WORKDIR /dl
 RUN curl --insecure --location --remote-name-all --remote-header-name \
     https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz \
@@ -421,6 +421,12 @@ RUN /dl/mingw/mingw-w64-crt/configure \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
+
+COPY src/threads.c $PREFIX/src/
+COPY src/threads.h $PREFIX/include/
+RUN $ARCH-gcc -c -Oz -I$PREFIX/include/ \
+        -ffunction-sections -Wa,--no-pad-sections $PREFIX/src/threads.c \
+ && $ARCH-ar r $PREFIX/lib/libmingwex.a threads.o
 
 WORKDIR /winpthreads
 RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
@@ -891,6 +897,7 @@ COPY --from=dl-ninja /dl/*.* /source/
 COPY --from=dl-cmake /dl/*.* /source/
 COPY --from=dl-dcmake /dl/*.* /source/
 COPY --from=dl-7z /dl/*.* /source/
+COPY --from=dl-aas-sign /dl/*.* /source/
 COPY --from=dl-nsis /dl/*.* /source/
 
 # Pack up a release
