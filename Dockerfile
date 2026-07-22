@@ -61,8 +61,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
 FROM base AS dl-gdb
 ARG GDB_VERSION=17.2 \
     GDB_SHA256=1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c \
-    EXPAT_VERSION=2.8.1 \
-    EXPAT_SHA256=10b195ee78160a908388180a8fe3603d4e9a12f4755fbf5f3816b23a9d750da0 \
+    EXPAT_VERSION=2.8.2 \
+    EXPAT_SHA256=3ad89b8588e6644bd4e49981480d48b21289eebbcd4f0a1a4afb1c29f99b6ab4 \
     LIBICONV_VERSION=1.19 \
     LIBICONV_SHA256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 WORKDIR /dl
@@ -175,8 +175,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
-ARG CMAKE_VERSION=4.3.3 \
-    CMAKE_SHA256=cba4bb7a44edf2877bb6f059932896383babe435b3a8c3b5df48b4aa41c9bb85
+ARG CMAKE_VERSION=4.4.0 \
+    CMAKE_SHA256=65757f442fdd242e27f1728fc26dc0cba4164f7a0791a5c788631c00080369bc
 WORKDIR /dl
 RUN curl --insecure --location --remote-name-all --remote-header-name \
     https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz \
@@ -250,6 +250,9 @@ RUN /dl/binutils/configure \
 # Fixes i686 Windows XP regression
 # https://sourceforge.net/p/mingw-w64/bugs/821/
 RUN sed -i /OpenThreadToken/d /dl/mingw/mingw-w64-crt/lib32/kernel32.def
+
+COPY src/mingw-*.patch $PREFIX/src/
+RUN cat $PREFIX/src/mingw-*.patch | patch -d/dl/mingw -p1
 
 WORKDIR /x-mingw-headers
 RUN printf '#include <crtdefs.h>\n#if __has_include_next(<stddef.h>)\n#include_next <stddef.h>\n#endif\n' \
