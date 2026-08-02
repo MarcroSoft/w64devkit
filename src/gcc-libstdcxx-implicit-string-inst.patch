@@ -1,0 +1,43 @@
+Always implicitly instantiate std::string members in user code
+
+libstdc++.a's explicit instantiations of basic_string<char> and
+basic_string<wchar_t> do not include out-of-line copies of every
+inline member (e.g. the C++11 move constructor). The extern template
+declarations in basic_string.tcc suppress implicit instantiation in
+user translation units, so whenever GCC declines to inline a call to
+one of those members -- which reliably happens at -Os and -O0 -- the
+program fails to link with undefined references such as:
+
+  undefined reference to `std::__cxx11::basic_string<...>::
+      basic_string(std::__cxx11::basic_string<...>&&)'
+
+Upstream already disables these extern template declarations for
+C++23 ("so C++23 code will implicitly instantiate std::string and
+std::wstring as needed"). Take that same well-tested path for all
+standards by disabling the class-level extern template declarations
+entirely; the _M_replace_cold suppression and the non-member operator
+declarations are kept. Members instantiate as COMDATs in each TU and
+deduplicate at link time, so -O2 code is unaffected and -Os/-O0 code
+becomes self-sufficient. This fixes w64devkit's own -Os-compiled
+tools and end users compiling with -Os or -O0 alike.
+
+--- a/libstdc++-v3/include/bits/basic_string.tcc
++++ b/libstdc++-v3/include/bits/basic_string.tcc
+@@ -1037,7 +1037,7 @@
+   // contains).
+   // Suppress the explicit instantiation declarations for C++23, so C++23
+   // code will implicitly instantiate std::string and std::wstring as needed.
+-# if __cplusplus <= 202002L && _GLIBCXX_EXTERN_TEMPLATE > 0
++# if 0 /* w64devkit: always implicitly instantiate, as C++23 does above */
+   extern template class basic_string<char>;
+ # elif ! _GLIBCXX_USE_CXX11_ABI
+   // Still need to prevent implicit instantiation of the COW empty rep,
+@@ -1065,7 +1065,7 @@
+     getline(basic_istream<char>&, string&);
+
+ #ifdef _GLIBCXX_USE_WCHAR_T
+-# if __cplusplus <= 202002L && _GLIBCXX_EXTERN_TEMPLATE > 0
++# if 0 /* w64devkit: always implicitly instantiate, as C++23 does above */
+   extern template class basic_string<wchar_t>;
+ # elif ! _GLIBCXX_USE_CXX11_ABI
+   extern template basic_string<wchar_t>::size_type

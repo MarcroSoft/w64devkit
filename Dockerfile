@@ -282,7 +282,6 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --enable-tls \
         --enable-version-specific-runtime-libs \
         --disable-libstdcxx-verbose \
-        --disable-extern-template \
         --disable-dependency-tracking \
         --disable-nls \
         --disable-lto \
@@ -464,7 +463,6 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --enable-tls \
         --enable-version-specific-runtime-libs \
         --disable-libstdcxx-verbose \
-        --disable-extern-template \
         --disable-dependency-tracking \
         --disable-lto \
         --disable-multilib \
