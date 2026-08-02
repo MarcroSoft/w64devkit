@@ -288,7 +288,7 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-lto \
         --disable-multilib \
         CFLAGS_FOR_TARGET="-Os" \
-        CXXFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-O2" \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-O2" \
         CXXFLAGS="-O2" \
@@ -472,7 +472,7 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-win32-registry \
         --enable-mingw-wildcard \
         CFLAGS_FOR_TARGET="-Os" \
-        CXXFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-O2" \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-Os" \
         CXXFLAGS="-Os" \
