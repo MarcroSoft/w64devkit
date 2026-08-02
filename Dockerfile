@@ -1,4 +1,4 @@
-ARG VERSION=2.8.0 \
+ARG VERSION=2.9.0 \
     PREFIX=/w64devkit
 
 FROM debian:trixie-slim AS base
@@ -17,8 +17,8 @@ COPY src/w64devkit.ico src/alias.c $PREFIX/src/
 # Source directories are normalized (no version in the directory name).
 
 FROM base AS dl-cross
-ARG BINUTILS_VERSION=2.46.1 \
-    BINUTILS_SHA256=e127a709cba24c76de8936cb7083dd768f28cd37eb010492e2f19b71eb1294e4 \
+ARG BINUTILS_VERSION=2.47 \
+    BINUTILS_SHA256=154ab23b60070e8f27013c22977f1129425d67d1e8acd6e13010e617811e4cff \
     GCC_VERSION=16.1.0 \
     GCC_SHA256=50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79 \
     GMP_VERSION=6.3.0 \
@@ -175,8 +175,8 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
-ARG CMAKE_VERSION=4.4.0 \
-    CMAKE_SHA256=65757f442fdd242e27f1728fc26dc0cba4164f7a0791a5c788631c00080369bc
+ARG CMAKE_VERSION=4.4.1 \
+    CMAKE_SHA256=95d4721f3625fb0d9d6ca480dd59a46c84b4c157f7fadd2e9b179ef9c871174d
 WORKDIR /dl
 RUN curl --insecure --location --remote-name-all --remote-header-name \
     https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz \
@@ -234,7 +234,6 @@ WORKDIR /dl/binutils
 COPY src/binutils-*.patch $PREFIX/src/
 RUN sed -ri 's/(static bool insert_timestamp = )/\1!/' ld/emultempl/pe*.em \
  && sed -ri 's/(int pe_enable_stdcall_fixup = )/\1!!/' ld/emultempl/pe*.em \
- && sed -ri 's/(static int use_big_obj = )/\1!/' gas/config/tc-i386.c \
  && cat $PREFIX/src/binutils-*.patch | patch -p1
 WORKDIR /x-binutils
 RUN /dl/binutils/configure \
@@ -445,9 +444,7 @@ RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
 
 WORKDIR /gcc
 COPY src/crossgcc-*.patch $PREFIX/src/
-RUN echo 'BEGIN {print "pecoff"}' \
-         >/dl/gcc/libbacktrace/filetype.awk \
- && cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
+RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
  && /dl/gcc/configure \
         --prefix=$PREFIX \
         --with-sysroot=$PREFIX \
