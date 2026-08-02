@@ -286,8 +286,8 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-nls \
         --disable-lto \
         --disable-multilib \
-        CFLAGS_FOR_TARGET="-O2" \
-        CXXFLAGS_FOR_TARGET="-O2" \
+        CFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-Os" \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-O2" \
         CXXFLAGS="-O2" \
@@ -315,7 +315,7 @@ RUN /dl/mingw/mingw-w64-crt/configure \
         --disable-dependency-tracking \
         --disable-lib32 \
         --enable-lib64 \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -327,7 +327,7 @@ RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
         --host=$ARCH \
         --enable-static \
         --disable-shared \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -346,7 +346,7 @@ RUN /dl/binutils/configure \
         --target=$ARCH \
         --disable-nls \
         --with-static-standard-libraries \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make MAKEINFO=true tooldir=$PREFIX -j$(nproc) \
  && make MAKEINFO=true tooldir=$PREFIX install \
@@ -360,8 +360,8 @@ RUN /dl/gmp/configure \
         --enable-static \
         --disable-shared \
         CC=$ARCH-gcc \
-        CFLAGS="-std=gnu17 -O2" \
-        CXXFLAGS="-O2" \
+        CFLAGS="-std=gnu17 -Os" \
+        CXXFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -374,7 +374,7 @@ RUN /dl/mpfr/configure \
         --enable-static \
         --disable-shared \
         CC=$ARCH-gcc \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -388,7 +388,7 @@ RUN /dl/mpc/configure \
         --enable-static \
         --disable-shared \
         CC=$ARCH-gcc \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -396,7 +396,7 @@ RUN /dl/mpc/configure \
 WORKDIR /zlib
 RUN /dl/binutils/zlib/configure \
         --host=$ARCH \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
  && make -j$(nproc) libz.a \
  && cp libz.a /deps/lib/ \
  && cp /dl/binutils/zlib/zlib.h /dl/binutils/zlib/zconf.h /deps/include/
@@ -419,7 +419,7 @@ RUN /dl/mingw/mingw-w64-crt/configure \
         --disable-dependency-tracking \
         --disable-lib32 \
         --enable-lib64 \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -437,7 +437,7 @@ RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
         --host=$ARCH \
         --enable-static \
         --disable-shared \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -469,11 +469,11 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-nls \
         --disable-win32-registry \
         --enable-mingw-wildcard \
-        CFLAGS_FOR_TARGET="-O2" \
-        CXXFLAGS_FOR_TARGET="-O2" \
+        CFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-Os" \
         LDFLAGS_FOR_TARGET="-s" \
-        CFLAGS="-O2" \
-        CXXFLAGS="-O2" \
+        CFLAGS="-Os" \
+        CXXFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install \
@@ -513,7 +513,7 @@ COPY src/gendef-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/gendef-*.patch | patch -d/dl/mingw -p1 \
  && /dl/mingw/mingw-w64-tools/gendef/configure \
         --host=$ARCH \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && mkdir -p /out/bin \
@@ -525,7 +525,7 @@ RUN ./configure \
         --host=$ARCH \
         --prefix=$PREFIX \
         --with-widl-includedir=$PREFIX/include \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && cp widl.exe /out/bin/ \
@@ -535,7 +535,7 @@ RUN ./configure \
 FROM cross AS build-quilt
 COPY src/quilt.cpp $PREFIX/src/
 RUN mkdir -p /out/bin \
- && $ARCH-g++ -std=c++20 -O2 -fno-exceptions -s \
+ && $ARCH-g++ -std=c++20 -Os -fno-exceptions -s \
         -o /out/bin/quilt.exe $PREFIX/src/quilt.cpp
 
 # Build PDCurses once and reuse it for both gdb and ccmake.
@@ -544,7 +544,7 @@ COPY --from=dl-pdcurses /dl/pdcurses /dl/pdcurses
 
 WORKDIR /dl/pdcurses
 RUN make -j$(nproc) -C wincon \
-       CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-I.. -O2 -DPDC_WIDE" pdcurses.a \
+       CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-I.. -Os -DPDC_WIDE" pdcurses.a \
  && mkdir -p /deps/lib /deps/include \
  && cp wincon/pdcurses.a /deps/lib/libcurses.a \
  && cp curses.h /deps/include/curses.h
@@ -562,7 +562,7 @@ RUN /dl/expat/configure \
         --without-docbook \
         --without-examples \
         --without-tests \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -573,7 +573,7 @@ RUN /dl/libiconv/configure \
         --host=$ARCH \
         --disable-nls \
         --disable-shared \
-        CFLAGS="-O2" \
+        CFLAGS="-Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
@@ -585,8 +585,8 @@ RUN cat $PREFIX/src/gdb-*.patch | patch -d/dl/gdb -p1 \
  && /dl/gdb/configure \
         --host=$ARCH \
         --enable-tui \
-        CFLAGS="-std=gnu17 -O2 -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
-        CXXFLAGS="-O2 -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
+        CFLAGS="-std=gnu17 -Os -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
+        CXXFLAGS="-Os -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
         LDFLAGS="-s -L/deps/lib" \
  && make MAKEINFO=true -j$(nproc) \
  && mkdir -p /out/bin \
@@ -601,7 +601,7 @@ RUN cat $PREFIX/src/make-*.patch | patch -d/dl/make -p1 \
  && /dl/make/configure \
         --host=$ARCH \
         --disable-nls \
-        CFLAGS="-std=gnu17 -O2" \
+        CFLAGS="-std=gnu17 -Os" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && mkdir -p /out/bin \
@@ -668,7 +668,7 @@ WORKDIR /dl/vim
 COPY src/rexxd.c src/vim-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/vim-*.patch | patch -p1 \
  && ARCH= make -C src -j$(nproc) -f Make_ming.mak CC="$ARCH-gcc -std=gnu17" \
-        OPTIMIZE=SPEED STATIC_STDCPLUS=yes HAS_GCC_EH=no \
+        OPTIMIZE=SIZE STATIC_STDCPLUS=yes HAS_GCC_EH=no \
         UNDER_CYGWIN=yes CROSS=yes CROSS_COMPILE=$ARCH- \
         FEATURES=HUGE VIMDLL=yes NETBEANS=no WINVER=0x0501 \
  && $ARCH-strip src/vimrun.exe \
@@ -685,7 +685,7 @@ RUN cat $PREFIX/src/vim-*.patch | patch -p1 \
  && printf '@vim -N -u NONE "+read %s" "+write" "%s"\r\n' \
         '$VIMRUNTIME/tutor/tutor' '%TMP%/tutor%RANDOM%' \
         >/out/bin/vimtutor.bat \
- && $ARCH-gcc -nostartfiles -O2 -funroll-loops -s -o /out/bin/xxd.exe \
+ && $ARCH-gcc -nostartfiles -Os -s -o /out/bin/xxd.exe \
         $PREFIX/src/rexxd.c -lmemory
 
 FROM cross AS build-ctags
@@ -698,7 +698,7 @@ RUN cat $PREFIX/src/ctags-*.patch | patch -p1 \
  && make -j$(nproc) -f mk_mingw.mak CC=gcc packcc.exe \
  && make -j$(nproc) -f mk_mingw.mak \
         CC=$ARCH-gcc WINDRES=$ARCH-windres \
-        OPT= CFLAGS=-O2 LDFLAGS=-s \
+        OPT= CFLAGS=-Os LDFLAGS=-s \
  && mkdir -p /out/bin \
  && cp ctags.exe /out/bin/
 
@@ -706,13 +706,13 @@ FROM cross AS build-zstd
 COPY --from=dl-zstd /dl/ /dl/
 
 WORKDIR /dl/zstd/lib
-RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libzstd.a \
+RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-Os" libzstd.a \
  && cp libzstd.a /deps/lib/ \
  && cp zstd.h zstd_errors.h zdict.h /deps/include/
 
 WORKDIR /dl/zstd
 RUN make -j$(nproc) -C programs zstd \
-        CC=$ARCH-gcc CFLAGS="-O2" LDFLAGS="-s" EXT=.exe \
+        CC=$ARCH-gcc CFLAGS="-Os" LDFLAGS="-s" EXT=.exe \
  && mkdir -p /out/bin \
  && cp programs/zstd.exe /out/bin/ \
  && $ARCH-gcc -DEXE=zstd.exe -DCMD=unzstd \
@@ -724,12 +724,12 @@ COPY --from=dl-ccache /dl/ /dl/
 COPY --from=build-zstd /deps/ /deps/
 
 WORKDIR /dl/xxhash
-RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libxxhash.a \
+RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-Os" libxxhash.a \
  && cp libxxhash.a /deps/lib/ \
  && cp xxhash.h /deps/include/
 
 WORKDIR /ccache
-RUN cmake -DCMAKE_BUILD_TYPE=Release \
+RUN cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_C_COMPILER=$ARCH-gcc \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
@@ -773,7 +773,7 @@ COPY src/ninja-*.patch $PREFIX/src/
 
 WORKDIR /ninja
 RUN cat $PREFIX/src/ninja-*.patch | patch -d/dl/ninja -p1 \
- && cmake -DCMAKE_BUILD_TYPE=Release \
+ && cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
         -DCMAKE_EXE_LINKER_FLAGS="-s" \
@@ -787,7 +787,7 @@ FROM cross AS build-dcmake
 COPY --from=dl-dcmake /dl/ /dl/
 
 WORKDIR /dcmake
-RUN cmake -DCMAKE_BUILD_TYPE=Release \
+RUN cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
         -DCMAKE_RC_COMPILER=$ARCH-windres \
@@ -805,7 +805,7 @@ COPY --from=build-pdcurses /deps/include/curses.h /deps/include/
 WORKDIR /cmake
 COPY src/cmake-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/cmake-*.patch | patch -d/dl/cmake -p1 \
- && cmake -DCMAKE_BUILD_TYPE=Release \
+ && cmake -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_C_COMPILER=$ARCH-gcc \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
@@ -850,7 +850,7 @@ RUN cmake -B /aas-sign-build -S /dl/aas-sign -DCMAKE_BUILD_TYPE=Release \
 FROM cross AS build-aas-sign-w32
 COPY --from=dl-aas-sign /dl/aas-sign /dl/aas-sign
 RUN cmake -B /aas-sign-build-w32 -S /dl/aas-sign \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_C_COMPILER=$ARCH-gcc \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
@@ -871,6 +871,8 @@ RUN sed -i 's/\r$//' Source/build.cpp \
  && scons -j$(nproc) \
         XGCC_W32_PREFIX=$ARCH- \
         TARGET_ARCH=amd64 \
+        APPEND_CCFLAGS=-Os \
+        APPEND_LINKFLAGS=-s \
         PREFIX=$PREFIX \
         PREFIX_BIN=$PREFIX/share/nsis/bin \
         PREFIX_DATA=$PREFIX/share/nsis \
@@ -942,11 +944,11 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
         -s -nostdlib -o $PREFIX/bin/pkg-config.exe $PREFIX/src/pkg-config.c \
         -lkernel32 \
  && $ARCH-gcc \
-        -O2 -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
+        -Os -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
         -s -nostdlib -o $PREFIX/bin/vc++filt.exe $PREFIX/src/vc++filt.c \
         -lkernel32 -lshell32 -ldbghelp \
  && $ARCH-gcc \
-        -O2 -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
+        -Os -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
         -s -nostdlib -o $PREFIX/bin/peports.exe $PREFIX/src/peports.c \
         -lkernel32 -lshell32 -lmemory \
  && $ARCH-gcc \
