@@ -282,12 +282,13 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --enable-tls \
         --enable-version-specific-runtime-libs \
         --disable-libstdcxx-verbose \
+        --disable-extern-template \
         --disable-dependency-tracking \
         --disable-nls \
         --disable-lto \
         --disable-multilib \
-        CFLAGS_FOR_TARGET="-O2" \
-        CXXFLAGS_FOR_TARGET="-O2" \
+        CFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-Os" \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-O2" \
         CXXFLAGS="-O2" \
@@ -463,14 +464,15 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --enable-tls \
         --enable-version-specific-runtime-libs \
         --disable-libstdcxx-verbose \
+        --disable-extern-template \
         --disable-dependency-tracking \
         --disable-lto \
         --disable-multilib \
         --disable-nls \
         --disable-win32-registry \
         --enable-mingw-wildcard \
-        CFLAGS_FOR_TARGET="-O2" \
-        CXXFLAGS_FOR_TARGET="-O2" \
+        CFLAGS_FOR_TARGET="-Os" \
+        CXXFLAGS_FOR_TARGET="-Os" \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-Os" \
         CXXFLAGS="-Os" \
