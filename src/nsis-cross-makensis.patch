@@ -15,8 +15,27 @@ accept a plain libz.a alongside the import-lib variants in ZLIB_W32
 lookup so makensis can static-link zlib like the rest of w64devkit, and
 skip the Source/Tests SConscript.
 
+Also strip makensis. The shared TestStrip helper confirms -s works by
+running the linked test binary (run=1), a guard against an old macOS
+g++ bug. Under our mingw cross-build that binary is a Windows PE the
+Linux host can't execute, so the check fails and -s is dropped,
+shipping makensis with its full symbol table. Switch the check to
+run=0 so a clean link is proof enough; this also covers the
+cross-platform utils (which w64devkit skips) that use the same helper.
+
 --- a/SCons/Config/gnu
 +++ b/SCons/Config/gnu
+@@ -80,7 +80,9 @@
+ 			return 0;
+ 		}
+ 	"""
+-	ctx.CheckLinkFlag('-s', run = 1, extension = '.cpp', code = c)
++	# w64devkit cross-compiles makensis to a Windows PE that can't run on
++	# the Linux build host; a link test alone confirms mingw ld takes -s.
++	ctx.CheckLinkFlag('-s', run = 0, extension = '.cpp', code = c)
+ 
+ ### debug
+ 
 @@ -122,6 +122,8 @@
  ### makensis environment
 
