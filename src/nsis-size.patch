@@ -1,0 +1,54 @@
+Optimize NSIS stubs, plugins, and makensis for size
+
+The GCC-built stubs were ~116 KB where the official MSVC-built stubs
+are ~38 KB, and every generated installer carries a stub. The bulk of
+the difference (~65 KB) is mingw-w64's monolithic libuuid.a: pulling a
+single GUID drags in every IID/PKEY constant as 20-byte .rdata$NAME
+entries. Each lives in its own COMDAT-style subsection, so
+-Wl,--gc-sections discards the unreferenced ones; -ffunction-sections
+lets it prune unreachable code too. Add -Oz, -fno-ident, and
+-fno-asynchronous-unwind-tables on top (the stubs neither throw nor
+catch). Locally verified on x86: stubs drop from ~116 KB to ~50 KB and
+zlib/lzma/bzip2 installers built with the patched stubs install their
+payload correctly. Note -fdata-sections must NOT be added: the stubs'
+custom linker script would then place zeroed buffers (.bss) into the
+image, ballooning the bzip2 stub to megabytes.
+
+Plugins link the same monolithic import libraries and get the same
+treatment. makensis itself gains nothing from the earlier attempt to
+append -Os at clone time, because SCons/Config/gnu appends its own -O2
+afterwards and the last -O flag wins; change that -O2 to -Os directly.
+
+--- a/SCons/Config/gnu
++++ b/SCons/Config/gnu
+@@ -100,6 +100,11 @@
+ stub_env.Append(CPPPATH = ['#$BUILD_CONFIG'])
+ 
+ if not defenv['DEBUG']:
+ 	stub_env.Append(CCFLAGS = ['-Os'])                # optimize for size
++	stub_env.Append(CCFLAGS = ['-Oz'])                # prefer size over speed harder
++	stub_env.Append(CCFLAGS = ['-fno-ident'])         # drop GCC version strings
++	stub_env.Append(CCFLAGS = ['-ffunction-sections'])# one section per function
++	stub_env.Append(CCFLAGS = ['-fno-asynchronous-unwind-tables']) # no unwind info
++	stub_env.Append(LINKFLAGS = ['-Wl,--gc-sections'])# prune unreferenced sections
+ stub_env.Append(CCFLAGS = ['-Wall'])                # all warnings
+ stub_env.Append(CCFLAGS = ['-xc'])                  # force compile as c
+@@ -126,5 +131,5 @@
+ makensis_env.Append(CPPPATH = ['#$BUILD_CONFIG'])
+ 
+ if not defenv['DEBUG']:
+-	makensis_env.Append(CCFLAGS = ['-O2'])                # optimize
++	makensis_env.Append(CCFLAGS = ['-Os'])                # optimize for size
+ makensis_env.Append(CFLAGS = ['-Wall'])                   # all warnings
+@@ -144,6 +149,11 @@
+ cross_env(plugin_env)
+ 
+ if not defenv['DEBUG']:
+ 	plugin_env.Append(CCFLAGS = ['-Os'])              # optimize for size
++	plugin_env.Append(CCFLAGS = ['-Oz'])              # prefer size over speed harder
++	plugin_env.Append(CCFLAGS = ['-fno-ident'])       # drop GCC version strings
++	plugin_env.Append(CCFLAGS = ['-ffunction-sections'])# one section per function
++	plugin_env.Append(CCFLAGS = ['-fno-asynchronous-unwind-tables']) # no unwind info
++	plugin_env.Append(LINKFLAGS = ['-Wl,--gc-sections'])# prune unreferenced sections
+ plugin_env.Append(CCFLAGS = ['-Wall'])              # level 3 warnings
+ plugin_env.Append(CCFLAGS = ['-fno-strict-aliasing']) # not safe for strict aliasing

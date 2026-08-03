@@ -9,8 +9,7 @@ build host.
 
 w64devkit ships a Windows toolchain, so we need a Windows makensis.exe
 specifically. Apply cross_env(makensis_env) so makensis cross-compiles
-too, pin makensis's C++ standard to gnu++14, optimize makensis for size
-with -Os (matching the rest of w64devkit), unconditionally link the
+too, pin makensis's C++ standard to gnu++14, unconditionally link the
 version library, force the makensis zlib check onto its win32 branch,
 accept a plain libz.a alongside the import-lib variants in ZLIB_W32
 lookup so makensis can static-link zlib like the rest of w64devkit, and
@@ -18,13 +17,12 @@ skip the Source/Tests SConscript.
 
 --- a/SCons/Config/gnu
 +++ b/SCons/Config/gnu
-@@ -122,6 +122,9 @@
+@@ -122,6 +122,8 @@
  ### makensis environment
 
  makensis_env = tdefenv.Clone()
 +cross_env(makensis_env)
 +makensis_env.Append(CXXFLAGS = ['-std=gnu++14'])
-+makensis_env.Append(CCFLAGS = ['-Os'])
 
  makensis_env.Append(CPPPATH = ['#$BUILD_CONFIG'])
  
