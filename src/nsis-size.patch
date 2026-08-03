@@ -15,7 +15,10 @@ custom linker script would then place zeroed buffers (.bss) into the
 image, ballooning the bzip2 stub to megabytes.
 
 Plugins link the same monolithic import libraries and get the same
-treatment. makensis itself gains nothing from the earlier attempt to
+treatment, except -fno-asynchronous-unwind-tables: NSISdl is C++ with
+exceptions, and on x86_64 (a SEH target) suppressing unwind info makes
+GCC fall back to SjLj EH whose runtime our libgcc does not provide,
+failing the link. makensis itself gains nothing from the earlier attempt to
 append -Os at clone time, because SCons/Config/gnu appends its own -O2
 afterwards and the last -O flag wins; change that -O2 to -Os directly.
 
@@ -40,15 +43,14 @@ afterwards and the last -O flag wins; change that -O2 to -Os directly.
 -	makensis_env.Append(CCFLAGS = ['-O2'])                # optimize
 +	makensis_env.Append(CCFLAGS = ['-Os'])                # optimize for size
  makensis_env.Append(CFLAGS = ['-Wall'])                   # all warnings
-@@ -144,6 +149,11 @@
+@@ -144,6 +149,10 @@
  cross_env(plugin_env)
- 
+
  if not defenv['DEBUG']:
  	plugin_env.Append(CCFLAGS = ['-Os'])              # optimize for size
 +	plugin_env.Append(CCFLAGS = ['-Oz'])              # prefer size over speed harder
 +	plugin_env.Append(CCFLAGS = ['-fno-ident'])       # drop GCC version strings
 +	plugin_env.Append(CCFLAGS = ['-ffunction-sections'])# one section per function
-+	plugin_env.Append(CCFLAGS = ['-fno-asynchronous-unwind-tables']) # no unwind info
 +	plugin_env.Append(LINKFLAGS = ['-Wl,--gc-sections'])# prune unreferenced sections
  plugin_env.Append(CCFLAGS = ['-Wall'])              # level 3 warnings
  plugin_env.Append(CCFLAGS = ['-fno-strict-aliasing']) # not safe for strict aliasing
