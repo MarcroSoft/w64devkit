@@ -249,7 +249,8 @@
  #ifdef NSIS_SUPPORT_FILEFUNCTIONS
    EW_FPUTWS,            // FileWriteUTF16LE: 4 [handle, string, ?int:string, TryWriteBOM]
 @@ -227,7 +209,7 @@
- #define FH_SIG 0xDEADBEEF
+-#define FH_SIG 0xDEADBEEF
++#define FH_SIG 0x33323337
  
  // neato surprise signature that goes in firstheader. :)
 -#define FH_INT1 0x6C6C754E
