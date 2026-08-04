@@ -1,30 +1,6 @@
-Shuffle the exehead opcode enum to hinder installer decompilation
-
-fileform.h invites this directly: "if you want people to not be able to
-decompile your installers as easily, reorder the lines following
-EW_INVALID_OPCODE randomly." Decompilers such as 7-Zip's NSIS handler and
-the various nsisunbz/unnsis tools recognize instructions by their opcode
-number against the known upstream ordering, so a stock build's bytecode
-maps straight back to LOGLIB-style script. Permuting the enum breaks that
-one-to-one mapping without touching any behavior: exec.c dispatches on the
-symbolic EW_* names and the compiler emits the same names, so both sides
-stay consistent as long as they share this header. Every EW_* use in the
-tree is symbolic and nothing indexes a table by raw opcode, so the numbers
-are free to move.
-
-The permutation preserves the four invariants the header and exec.c
-require: EW_INVALID_OPCODE stays 0; each opcode remains inside its own
-NSIS_CONFIG_*/NSIS_SUPPORT_* guard (so every build configuration still
-compiles); the _UNICODE-only EW_FPUTWS/EW_FGETWS stay last among exehead
-opcodes; and the compiler-only EW_GETLABELADDR/EW_GETFUNCTIONADDR stay
-after all exehead opcodes. Generated with a fixed seed (FH_SIG,
-0xDEADBEEF) so the ordering is reproducible; 67 of 73 opcodes change
-value. Verified to syntax-check under both the full config and no config
-macros, and that the resulting numbering stays unique and contiguous.
-
 --- a/Source/exehead/fileform.h
 +++ b/Source/exehead/fileform.h
-@@ -51,154 +51,136 @@
+@@ -51,155 +51,137 @@
  {
    EW_INVALID_OPCODE,    // zero is invalid. useful for catching errors. (otherwise an all zeroes instruction
                          // does nothing, which is easily ignored but means something is wrong)
@@ -119,17 +95,6 @@ macros, and that the resulting numbering stays unique and contiguous.
  #endif
 -#ifdef NSIS_SUPPORT_DELETE
 -  EW_DELETEFILE,        // Delete File: 2, [filename, rebootok]
--#endif
--#ifdef NSIS_SUPPORT_MESSAGEBOX
--  EW_MESSAGEBOX,        // MessageBox: 5,[MB_flags,text,retv1:retv2,moveonretv1:moveonretv2]
--#endif
--#ifdef NSIS_SUPPORT_RMDIR
--  EW_RMDIR,             // RMDir: 2 [path, recursiveflag]
--#endif
--#ifdef NSIS_SUPPORT_STROPTS
--  EW_STRLEN,            // StrLen: 2 [output, input]
--  EW_ASSIGNVAR,         // Assign: 4 [variable (0-9) to assign, string to assign, maxlen, startpos]
--  EW_STRCMP,            // StrCmp: 5 [str1, str2, jump_if_equal, jump_if_not_equal, case-sensitive?]
 +#ifdef NSIS_CONFIG_COMPONENTPAGE
 +  EW_INSTTYPESET,       // InstTypeSetFlags:  3: [idx, 0, flags]
 +                        // InstTypeGetFlags:  3: [idx, 1, output]
@@ -138,8 +103,8 @@ macros, and that the resulting numbering stays unique and contiguous.
 +                        // SectionSetFlags:   3: [idx, 2, flags]
 +                        // SectionGetFlags:   3: [idx, 3, output]
  #endif
--#ifdef NSIS_SUPPORT_ENVIRONMENT
--  EW_READENVSTR,        // ReadEnvStr/ExpandEnvStrings: 3 [output, string_with_env_variables, IsRead]
+-#ifdef NSIS_SUPPORT_MESSAGEBOX
+-  EW_MESSAGEBOX,        // MessageBox: 5,[MB_flags,text,retv1:retv2,moveonretv1:moveonretv2]
 +#ifdef NSIS_CONFIG_ENHANCEDUI_SUPPORT
 +  EW_SHOWWINDOW,        // ShowWindow:        2: [hwnd, show state]
 +  EW_LOADANDSETIMAGE,   // SetBrandingImage/LoadAndSetImage: 5: [ctrl imagetype lrflags imageid [output]]
@@ -147,15 +112,26 @@ macros, and that the resulting numbering stays unique and contiguous.
 +  EW_SETCTLCOLORS,      // SerCtlColors:      3: [hwnd, pointer to struct colors]
 +  EW_GETDLGITEM,        // GetDlgItem:        3: [outputvar, dialog, item_id]
  #endif
+-#ifdef NSIS_SUPPORT_RMDIR
+-  EW_RMDIR,             // RMDir: 2 [path, recursiveflag]
+-#endif
+-#ifdef NSIS_SUPPORT_STROPTS
+-  EW_STRLEN,            // StrLen: 2 [output, input]
+-  EW_ASSIGNVAR,         // Assign: 4 [variable (0-9) to assign, string to assign, maxlen, startpos]
+-  EW_STRCMP,            // StrCmp: 5 [str1, str2, jump_if_equal, jump_if_not_equal, case-sensitive?]
+-#endif
+-#ifdef NSIS_SUPPORT_ENVIRONMENT
+-  EW_READENVSTR,        // ReadEnvStr/ExpandEnvStrings: 3 [output, string_with_env_variables, IsRead]
+-#endif
  #ifdef NSIS_SUPPORT_INTOPTS
    EW_INTCMP,            // IntCmp: 6 [val1, val2, equal, val1<val2, val1>val2, flags] where flags: bit 0x01 is set for unsigned operations and bit 0x8000 is set for 64-bit operations
 -  EW_INTOP,             // IntOp: 4 [output, input1, input2, op] where op: 0=add, 1=sub, 2=mul, 3=div, 4=bor, 5=band, 6=bxor, 7=bnot input1, 8=lor, 9=land 10=mod, 11=shl, 12=sar, 13=shr (bneg is implemented with bxor in compiler)
    EW_INTFMT,            // IntFmt: 4 [output, format, input, 64-bit]
--#endif
--#ifdef NSIS_SUPPORT_STACK
--  EW_PUSHPOP,           // Push/Pop/Exchange: 3 [variable/string, ?pop:push, ?exch]
 +  EW_INTOP,             // IntOp: 4 [output, input1, input2, op] where op: 0=add, 1=sub, 2=mul, 3=div, 4=bor, 5=band, 6=bxor, 7=bnot input1, 8=lor, 9=land 10=mod, 11=shl, 12=sar, 13=shr (bneg is implemented with bxor in compiler)
  #endif
+-#ifdef NSIS_SUPPORT_STACK
+-  EW_PUSHPOP,           // Push/Pop/Exchange: 3 [variable/string, ?pop:push, ?exch]
+-#endif
  #ifdef NSIS_SUPPORT_HWNDS
 -  EW_FINDWINDOW,        // FindWindow: 5, [outputvar, window class,window name, window_parent, window_after]
    EW_SENDMESSAGE,       // SendMessage: 6 [output, hwnd, msg, wparam, lparam, [wparamstring?1:0 | lparamstring?2:0 | timeout<<2]
@@ -169,7 +145,11 @@ macros, and that the resulting numbering stays unique and contiguous.
 -  EW_LOADANDSETIMAGE,   // SetBrandingImage/LoadAndSetImage: 5: [ctrl imagetype lrflags imageid [output]]
 -  EW_CREATEFONT,        // CreateFont:        5: [handle output, face name, height, weight, flags]
 -  EW_SHOWWINDOW,        // ShowWindow:        2: [hwnd, show state]
--#endif
++#ifdef NSIS_SUPPORT_STROPTS
++  EW_STRLEN,            // StrLen: 2 [output, input]
++  EW_ASSIGNVAR,         // Assign: 4 [variable (0-9) to assign, string to assign, maxlen, startpos]
++  EW_STRCMP,            // StrCmp: 5 [str1, str2, jump_if_equal, jump_if_not_equal, case-sensitive?]
+ #endif
 -
 -#ifdef NSIS_SUPPORT_SHELLEXECUTE
 -  EW_SHELLEXEC,         // ShellExecute program: 5, [SEE_MASK_FLAG_*, verb, file, parameters, showwindow] (Will wait if SEE_MASK_NOCLOSEPROCESS is set)
@@ -177,11 +157,7 @@ macros, and that the resulting numbering stays unique and contiguous.
 -
 -#ifdef NSIS_SUPPORT_EXECUTE
 -  EW_EXECUTE,           // Execute program: 3,[complete command line,waitflag,>=0?output errorcode]
-+#ifdef NSIS_SUPPORT_STROPTS
-+  EW_STRLEN,            // StrLen: 2 [output, input]
-+  EW_ASSIGNVAR,         // Assign: 4 [variable (0-9) to assign, string to assign, maxlen, startpos]
-+  EW_STRCMP,            // StrCmp: 5 [str1, str2, jump_if_equal, jump_if_not_equal, case-sensitive?]
- #endif
+-#endif
 -
  #ifdef NSIS_SUPPORT_GETFILETIME
    EW_GETFILETIME,       // GetFileTime; 3 [file highout lowout]
@@ -189,11 +165,15 @@ macros, and that the resulting numbering stays unique and contiguous.
 -
 -#ifdef NSIS_SUPPORT_GETDLLVERSION
 -  EW_GETDLLVERSION,     // GetDLLVersion: 4 [file highout lowout fixedoffset]
--#endif
++#ifdef NSIS_SUPPORT_STACK
++  EW_PUSHPOP,           // Push/Pop/Exchange: 3 [variable/string, ?pop:push, ?exch]
+ #endif
 -
 -#ifdef NSIS_SUPPORT_ACTIVEXREG
 -  EW_REGISTERDLL,       // Register DLL: 3,[DLL file name, string ptr of function to call, text to put in display (<0 if none/pass parms), 1 - no unload, 0 - unload]
--#endif
++#ifdef NSIS_CONFIG_UNINSTALL_SUPPORT
++  EW_WRITEUNINSTALLER,  // WriteUninstaller: 3 [name, offset, icon_size]
+ #endif
 -
 -#ifdef NSIS_SUPPORT_CREATESHORTCUT
 -  EW_CREATESHORTCUT,    // Make Shortcut: 5, [link file, target file, parameters, icon file, packed CS_*]
@@ -210,9 +190,7 @@ macros, and that the resulting numbering stays unique and contiguous.
 -#ifdef NSIS_SUPPORT_INIFILES
 -  EW_WRITEINI,          // Write INI String: 4, [Section, Name, Value, INI File]
 -  EW_READINISTR,        // ReadINIStr: 4 [output, section, name, ini_file]
-+#ifdef NSIS_SUPPORT_STACK
-+  EW_PUSHPOP,           // Push/Pop/Exchange: 3 [variable/string, ?pop:push, ?exch]
- #endif
+-#endif
 -
 -#ifdef NSIS_SUPPORT_REGISTRYFUNCTIONS
 -  EW_DELREG,            // DeleteRegValue/DeleteRegKey: 4, [root key(int), KeyName, ValueName, ActionAndFlags(DELREG*)]
@@ -220,9 +198,7 @@ macros, and that the resulting numbering stays unique and contiguous.
 -                        //  typelen=1 for str, 2 for dword, 3 for binary, 0 for expanded str
 -  EW_READREGSTR,        // ReadRegStr: 5 [output, rootkey(int), keyname, itemname, ==1?int::str]
 -  EW_REGENUM,           // RegEnum: 5 [output, rootkey, keyname, index, ?key:value]
-+#ifdef NSIS_CONFIG_UNINSTALL_SUPPORT
-+  EW_WRITEUNINSTALLER,  // WriteUninstaller: 3 [name, offset, icon_size]
- #endif
+-#endif
 -
 -#ifdef NSIS_SUPPORT_FILEFUNCTIONS
 -  EW_FCLOSE,            // FileClose: 1 [handle]
@@ -242,12 +218,17 @@ macros, and that the resulting numbering stays unique and contiguous.
 -
 -#ifdef NSIS_CONFIG_UNINSTALL_SUPPORT
 -  EW_WRITEUNINSTALLER,  // WriteUninstaller: 3 [name, offset, icon_size]
--#endif
++#ifdef NSIS_SUPPORT_GETDLLVERSION
++  EW_GETDLLVERSION,     // GetDLLVersion: 4 [file highout lowout fixedoffset]
+ #endif
 -
 -#ifdef NSIS_CONFIG_LOG
 -  EW_LOG,               // LogText: 2 [0, text] / LogSet: [1, logstate]
--#endif
--
++#ifdef NSIS_SUPPORT_SHELLEXECUTE
++  EW_SHELLEXEC,         // ShellExecute program: 5, [SEE_MASK_FLAG_*, verb, file, parameters, showwindow] (Will wait if SEE_MASK_NOCLOSEPROCESS is set)
+ #endif
++  EW_NOP,               // Nop/Jump, do nothing: 1, [?new address+1:advance one]
+ 
 -#ifdef NSIS_CONFIG_COMPONENTPAGE
 -  EW_SECTIONSET,        // SectionSetText:    3: [idx, 0, text]
 -                        // SectionGetText:    3: [idx, 1, output]
@@ -255,19 +236,24 @@ macros, and that the resulting numbering stays unique and contiguous.
 -                        // SectionGetFlags:   3: [idx, 3, output]
 -  EW_INSTTYPESET,       // InstTypeSetFlags:  3: [idx, 0, flags]
 -                        // InstTypeGetFlags:  3: [idx, 1, output]
-+#ifdef NSIS_SUPPORT_GETDLLVERSION
-+  EW_GETDLLVERSION,     // GetDLLVersion: 4 [file highout lowout fixedoffset]
- #endif
+-#endif
 -
 -  EW_GETOSINFO,         // 1+ [operation, ...]
 -  EW_RESERVEDOPCODE,    // Free slot, feel free to use it for something
 -
 -#ifdef NSIS_LOCKWINDOW_SUPPORT
 -  EW_LOCKWINDOW,
-+#ifdef NSIS_SUPPORT_SHELLEXECUTE
-+  EW_SHELLEXEC,         // ShellExecute program: 5, [SEE_MASK_FLAG_*, verb, file, parameters, showwindow] (Will wait if SEE_MASK_NOCLOSEPROCESS is set)
- #endif
-+  EW_NOP,               // Nop/Jump, do nothing: 1, [?new address+1:advance one]
- 
+-#endif
+-
  #ifdef _UNICODE     // opcodes available only in Unicode installers must be at the end of the enumeration
  #ifdef NSIS_SUPPORT_FILEFUNCTIONS
+   EW_FPUTWS,            // FileWriteUTF16LE: 4 [handle, string, ?int:string, TryWriteBOM]
+@@ -227,7 +209,7 @@
+ #define FH_SIG 0xDEADBEEF
+ 
+ // neato surprise signature that goes in firstheader. :)
+-#define FH_INT1 0x6C6C754E
++#define FH_INT1 0x6372614D
+ #define FH_INT2 0x74666F73
+ #define FH_INT3 0x74736E49
+ 
