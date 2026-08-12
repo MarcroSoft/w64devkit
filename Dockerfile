@@ -1,4 +1,4 @@
-ARG VERSION=2.9.0 \
+ARG VERSION=2.9.1 \
     PREFIX=/w64devkit
 
 FROM debian:trixie-slim AS base
@@ -19,8 +19,8 @@ COPY src/w64devkit.ico src/alias.c $PREFIX/src/
 FROM base AS dl-cross
 ARG BINUTILS_VERSION=2.47 \
     BINUTILS_SHA256=154ab23b60070e8f27013c22977f1129425d67d1e8acd6e13010e617811e4cff \
-    GCC_VERSION=16.1.0 \
-    GCC_SHA256=50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79 \
+    GCC_VERSION=16.2.0 \
+    GCC_SHA256=e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e \
     GMP_VERSION=6.3.0 \
     GMP_SHA256=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898 \
     MINGW_VERSION=14.0.0 \
@@ -494,9 +494,9 @@ RUN $ARCH-gcc -DEXE=gcc.exe -DCMD=cc \
  && $ARCH-gcc -DEXE=gcc.exe -DCMD="cc -ansi" \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/c89.exe $PREFIX/src/alias.c -lkernel32 \
- && printf '%s\n' addr2line ar as c++filt cpp dlltool dllwrap elfedit g++ \
+ && printf '%s\n' addr2line ar as c++filt cpp dlltool dllwrap g++ \
       gcc gcc-ar gcc-nm gcc-ranlib gcov gcov-dump gcov-tool gendef gfortran \
-      ld nm objcopy objdump ranlib readelf size strings strip uuidgen widl \
+      ld nm objcopy objdump ranlib size strings strip uuidgen widl \
       windmc windres \
     | xargs -I{} -P$(nproc) \
           $ARCH-gcc -DEXE={}.exe -DCMD=$ARCH-{} \
