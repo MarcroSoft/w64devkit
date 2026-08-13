@@ -146,8 +146,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      # Signering kraever Azure-secrets. Er de ikke sat, laves en USIGNERET
+      # release i stedet - af de arkiver build-x64/build-x86 allerede har
+      # lavet. De signerede trin nedenfor springes saa over, og der bygges
+      # ikke om. Saet secrets'ne op igen for at faa signerede releases.
+      - name: Afgoer signering
+        id: mode
+        run: |
+          if [ -n "$AZURE_CLIENT_ID" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Ingen signerings-secrets - laver USIGNERET release fra byg-artefakterne"
+          fi
 
       - name: Compute version
         id: filename
@@ -155,7 +166,12 @@ jobs:
           VERSION=${GITHUB_REF_NAME#v}
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Docker Buildx
+        if: steps.mode.outputs.sign == 'true'
+        uses: docker/setup-buildx-action@v4
+
       - name: Build signed image (x64)
+        if: steps.mode.outputs.sign == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -166,6 +182,7 @@ jobs:
           cache-to: type=gha,scope=w64devkit-x64,mode=max,ignore-error=true
 
       - name: Sign and pack (x64)
+        if: steps.mode.outputs.sign == 'true'
         run: |
           docker run --rm \
             -e AZURE_CLIENT_ID -e AZURE_TENANT_ID \
@@ -176,9 +193,11 @@ jobs:
           ls -lh w64devkit-x64-${{ steps.filename.outputs.version }}.7z.exe
 
       - name: Apply x86 patch
+        if: steps.mode.outputs.sign == 'true'
         run: patch -p1 -i src/variant-x86.patch
 
       - name: Build signed image (x86)
+        if: steps.mode.outputs.sign == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -189,6 +208,7 @@ jobs:
           cache-to: type=gha,scope=w64devkit-x86,mode=max,ignore-error=true
 
       - name: Sign and pack (x86)
+        if: steps.mode.outputs.sign == 'true'
         run: |
           docker run --rm \
             -e AZURE_CLIENT_ID -e AZURE_TENANT_ID \
@@ -197,6 +217,16 @@ jobs:
             w64devkit:x86-signed \
             > w64devkit-x86-${{ steps.filename.outputs.version }}.7z.exe
           ls -lh w64devkit-x86-${{ steps.filename.outputs.version }}.7z.exe
+
+      # Usigneret vej: genbrug de arkiver build-jobbene lavede, ingen
+      # genopbygning. merge-multiple laegger dem i arbejdsmappen ved siden
+      # af source.tar, saa 'Create release' finder dem med samme glob.
+      - name: Hent usignerede arkiver
+        if: steps.mode.outputs.sign != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: w64devkit-*.7z.exe
+          merge-multiple: true
 
       - name: Download source tarball
         uses: actions/download-artifact@v8
