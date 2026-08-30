@@ -985,6 +985,54 @@ RUN sed -i 's/\r$//' Source/build.cpp \
         install-compiler install-stubs install-includes install-plugins \
         install-contrib install-utils
 
+# Also provide x86 stubs and plugins in the multilib kit so makensis
+# can produce 32-bit installers ("Target x86-unicode"). NSIS never
+# passes -m32 itself and derives every tool name from XGCC_W32_PREFIX,
+# so present the multilib compiler through an i686 interface, wrapper
+# scripts mirroring the kit's own i686 aliases. The wrappers embed
+# absolute tool paths because scons scrubs the PATH of its
+# subprocesses down to the directory holding the prefixed tools, so
+# they cannot find /bootstrap/bin themselves. NSIS's zlib configure
+# probe runs even for stub-only targets and link-tests with -m32, so
+# it needs a 32-bit libz.a, built from Binutils' bundled zlib exactly
+# like the 64-bit copy in /deps.
+RUN if [ "$GCC_MULTILIB" = enable ]; then \
+        printf '#!/bin/sh\nexec %s -m32 "$@"\n' "$(command -v $ARCH-gcc)" \
+            >/usr/local/bin/i686-w64-mingw32-gcc \
+     && printf '#!/bin/sh\nexec %s -m32 "$@"\n' "$(command -v $ARCH-g++)" \
+            >/usr/local/bin/i686-w64-mingw32-g++ \
+     && printf '#!/bin/sh\nexec %s --32 "$@"\n' "$(command -v $ARCH-as)" \
+            >/usr/local/bin/i686-w64-mingw32-as \
+     && printf '#!/bin/sh\nexec %s --target=pe-i386 "$@"\n' \
+            "$(command -v $ARCH-windres)" \
+            >/usr/local/bin/i686-w64-mingw32-windres \
+     && printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v $ARCH-ar)" \
+            >/usr/local/bin/i686-w64-mingw32-ar \
+     && printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v $ARCH-ranlib)" \
+            >/usr/local/bin/i686-w64-mingw32-ranlib \
+     && chmod +x /usr/local/bin/i686-w64-mingw32-* \
+     && mkdir -p /zlib32 /deps32/lib /deps32/include \
+     && (cd /zlib32 \
+         && /dl/binutils/zlib/configure --host=i686-w64-mingw32 \
+                CFLAGS="-O2" \
+         && make -j$(nproc) libz.a \
+         && cp libz.a /deps32/lib/ \
+         && cp /dl/binutils/zlib/zlib.h /dl/binutils/zlib/zconf.h \
+               /deps32/include/) \
+     && scons -j$(nproc) \
+            XGCC_W32_PREFIX=i686-w64-mingw32- \
+            TARGET_ARCH=x86 \
+            PREFIX=$PREFIX \
+            PREFIX_BIN=$PREFIX/share/nsis/bin \
+            PREFIX_DATA=$PREFIX/share/nsis \
+            NSIS_CONFIG_CONST_DATA_PATH=no \
+            PREFIX_DEST=/out \
+            SKIPDOC=all \
+            SKIPUTILS="NSIS Menu,Makensisw,VPatch/Source/GenPat,MakeLangId,zip2exe" \
+            ZLIB_W32=/deps32 \
+            install-stubs install-plugins ; \
+    fi
+
 # Collect source tarballs
 FROM base AS source
 COPY --from=dl-cross /dl/*.* /source/
