@@ -217,8 +217,8 @@ ENV ARCH=x86_64-w64-mingw32 \
     GCC_MANIFEST_FLAG="" \
     BUSYBOX_CONFIG=mingw64u_defconfig \
     ZSTD_THREAD_FLAG="" \
-    CMAKE_C_FLAGS="" \
-    CMAKE_CXX_FLAGS="" \
+    CMAKE_WINNT_C_FLAGS="" \
+    CMAKE_WINNT_CXX_FLAGS="" \
     NSIS_ARCH=amd64
 
 FROM dl-cross AS variant-x86
@@ -230,8 +230,8 @@ ENV ARCH=i686-w64-mingw32 \
     GCC_MANIFEST_FLAG=--disable-win32-utf8-manifest \
     BUSYBOX_CONFIG=mingw32w_defconfig \
     ZSTD_THREAD_FLAG=HAVE_THREAD=0 \
-    CMAKE_C_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
-    CMAKE_CXX_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
+    CMAKE_WINNT_C_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
+    CMAKE_WINNT_CXX_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
     NSIS_ARCH=x86
 
 FROM variant-${VARIANT} AS cross
@@ -906,8 +906,8 @@ COPY --from=build-pdcurses /deps/include/curses.h /deps/include/
 WORKDIR /cmake
 COPY src/cmake-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/cmake-*.patch | patch -d/dl/cmake -p1 \
- && cmake -DCMAKE_C_FLAGS="$CMAKE_C_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
+ && cmake -DCMAKE_C_FLAGS="$CMAKE_WINNT_C_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$CMAKE_WINNT_CXX_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_C_COMPILER=$ARCH-gcc \
