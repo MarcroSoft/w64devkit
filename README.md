@@ -17,10 +17,12 @@ Included tools:
 * [NSIS][nsis] : Windows installer compiler (`makensis`)
 * [aas-sign][aas-sign] : Authenticode signing via Azure Trusted Signing
 
-It is an MSVCRT toolchain with pthreads, C++11 threads, and OpenMP. All
-included runtime components are static. **Docker is not required to use
-the development kit**. It's merely a reliable, clean environment for
-building the kit itself.
+It is an **MSVCRT** toolchain with pthreads, C11 and C++11 threads, and
+OpenMP. The 64-bit release is multilib, targeting both x64 and x86. All
+runtime components are all static.
+
+**Docker is not required to use the development kit**. It's merely a
+reliable, clean environment for building the kit itself.
 
 ## Build
 
@@ -28,6 +30,13 @@ Build the image, then run it to produce a self-extracting 7z archive:
 
     docker build -t w64devkit .
     docker run --rm w64devkit >w64devkit-x64.exe
+
+The default `x64` variant is a combined x64/x86 multilib toolchain. Select a
+standalone x86 toolchain with a build argument:
+
+    docker build --build-arg VARIANT=x86 -t w64devkit .
+
+`multibuild.sh -a` builds both variants.
 
 This takes about 15 minutes on modern systems. You will need an internet
 connection during the first few minutes of the build. **Note:** Do not use

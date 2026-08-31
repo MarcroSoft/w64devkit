@@ -1,12 +1,13 @@
 ARG VERSION=2.9.1 \
     PREFIX=/w64devkit
+ARG VARIANT=x64
 
 FROM debian:trixie-slim AS base
 ARG PREFIX
 ENV PREFIX=$PREFIX
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-  build-essential cmake curl libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full \
+  build-essential cmake libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full \
   python3 scons
 
 COPY src/w64devkit.ico src/alias.c $PREFIX/src/
@@ -30,22 +31,19 @@ ARG BINUTILS_VERSION=2.47 \
     MPFR_VERSION=4.2.2 \
     MPFR_SHA256=b67ba0383ef7e8a8563734e2e889ef5ec3c3b898a01d00fa0a6869ad81c6ce01
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILS_VERSION.tar.xz \
-    https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.xz \
-    https://ftp.gnu.org/gnu/gmp/gmp-$GMP_VERSION.tar.xz \
-    https://ftp.gnu.org/gnu/mpc/mpc-$MPC_VERSION.tar.xz \
-    https://ftp.gnu.org/gnu/mpfr/mpfr-$MPFR_VERSION.tar.xz \
-    https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v$MINGW_VERSION.tar.bz2 \
- && printf '%s  %s\n' \
-      $BINUTILS_SHA256 binutils-$BINUTILS_VERSION.tar.xz \
-      $GCC_SHA256 gcc-$GCC_VERSION.tar.xz \
-      $GMP_SHA256 gmp-$GMP_VERSION.tar.xz \
-      $MPC_SHA256 mpc-$MPC_VERSION.tar.xz \
-      $MPFR_SHA256 mpfr-$MPFR_VERSION.tar.xz \
-      $MINGW_SHA256 mingw-w64-v$MINGW_VERSION.tar.bz2 \
-    | sha256sum -c \
- && mkdir binutils \
+ADD --checksum=sha256:$BINUTILS_SHA256 \
+    https://ftp.wayne.edu/gnu/binutils/binutils-$BINUTILS_VERSION.tar.xz ./
+ADD --checksum=sha256:$GCC_SHA256 \
+    https://ftp.wayne.edu/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.xz ./
+ADD --checksum=sha256:$GMP_SHA256 \
+    https://ftp.wayne.edu/gnu/gmp/gmp-$GMP_VERSION.tar.xz ./
+ADD --checksum=sha256:$MPC_SHA256 \
+    https://ftp.wayne.edu/gnu/mpc/mpc-$MPC_VERSION.tar.xz ./
+ADD --checksum=sha256:$MPFR_SHA256 \
+    https://ftp.wayne.edu/gnu/mpfr/mpfr-$MPFR_VERSION.tar.xz ./
+ADD --checksum=sha256:$MINGW_SHA256 \
+    https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v$MINGW_VERSION.tar.bz2 ./
+RUN mkdir binutils \
  && tar xJf binutils-$BINUTILS_VERSION.tar.xz -C binutils --strip-components=1 \
  && mkdir gcc \
  && tar xJf gcc-$GCC_VERSION.tar.xz -C gcc --strip-components=1 \
@@ -61,21 +59,19 @@ RUN curl --insecure --location --remote-name-all --remote-header-name \
 FROM base AS dl-gdb
 ARG GDB_VERSION=17.2 \
     GDB_SHA256=1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c \
-    EXPAT_VERSION=2.8.2 \
-    EXPAT_SHA256=3ad89b8588e6644bd4e49981480d48b21289eebbcd4f0a1a4afb1c29f99b6ab4 \
+    EXPAT_VERSION=2.8.3 \
+    EXPAT_TAG=R_2_8_3 \
+    EXPAT_SHA256=f6256df90c906773d344da084402b7d3e4f22ed41b1a59c989098a83d3ea0c85 \
     LIBICONV_VERSION=1.19 \
     LIBICONV_SHA256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://ftp.gnu.org/gnu/gdb/gdb-$GDB_VERSION.tar.xz \
-    https://github.com/libexpat/libexpat/releases/download/R_$(echo $EXPAT_VERSION | tr . _)/expat-$EXPAT_VERSION.tar.xz \
-    https://ftp.gnu.org/gnu/libiconv/libiconv-$LIBICONV_VERSION.tar.gz \
- && printf '%s  %s\n' \
-      $GDB_SHA256 gdb-$GDB_VERSION.tar.xz \
-      $EXPAT_SHA256 expat-$EXPAT_VERSION.tar.xz \
-      $LIBICONV_SHA256 libiconv-$LIBICONV_VERSION.tar.gz \
-    | sha256sum -c \
- && mkdir gdb \
+ADD --checksum=sha256:$GDB_SHA256 \
+    https://ftp.wayne.edu/gnu/gdb/gdb-$GDB_VERSION.tar.xz ./
+ADD --checksum=sha256:$EXPAT_SHA256 \
+    https://github.com/libexpat/libexpat/releases/download/$EXPAT_TAG/expat-$EXPAT_VERSION.tar.xz ./
+ADD --checksum=sha256:$LIBICONV_SHA256 \
+    https://ftp.wayne.edu/gnu/libiconv/libiconv-$LIBICONV_VERSION.tar.gz ./
+RUN mkdir gdb \
  && tar xJf gdb-$GDB_VERSION.tar.xz -C gdb --strip-components=1 \
  && mkdir expat \
  && tar xJf expat-$EXPAT_VERSION.tar.xz -C expat --strip-components=1 \
@@ -86,80 +82,71 @@ FROM base AS dl-pdcurses
 ARG PDCURSES_VERSION=3.9 \
     PDCURSES_SHA256=590dbe0f5835f66992df096d3602d0271103f90cf8557a5d124f693c2b40d7ec
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://downloads.sourceforge.net/project/pdcurses/pdcurses/$PDCURSES_VERSION/PDCurses-$PDCURSES_VERSION.tar.gz \
- && printf '%s  %s\n' $PDCURSES_SHA256 PDCurses-$PDCURSES_VERSION.tar.gz \
-    | sha256sum -c \
- && mkdir pdcurses \
+ADD --checksum=sha256:$PDCURSES_SHA256 \
+    https://downloads.sourceforge.net/project/pdcurses/pdcurses/$PDCURSES_VERSION/PDCurses-$PDCURSES_VERSION.tar.gz ./
+RUN mkdir pdcurses \
  && tar xzf PDCurses-$PDCURSES_VERSION.tar.gz -C pdcurses --strip-components=1
 
 FROM base AS dl-make
 ARG MAKE_VERSION=4.4.1 \
     MAKE_SHA256=dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://ftp.gnu.org/gnu/make/make-$MAKE_VERSION.tar.gz \
- && printf '%s  %s\n' $MAKE_SHA256 make-$MAKE_VERSION.tar.gz | sha256sum -c \
- && mkdir make \
+ADD --checksum=sha256:$MAKE_SHA256 \
+    https://ftp.wayne.edu/gnu/make/make-$MAKE_VERSION.tar.gz ./
+RUN mkdir make \
  && tar xzf make-$MAKE_VERSION.tar.gz -C make --strip-components=1
 
 FROM base AS dl-busybox
 ARG BUSYBOX_VERSION=FRP-6075-g169694ebd \
-    BUSYBOX_SHA256=44401413c86a839deeec3eba088af244a1594f18ff9fd0622811100e4cc2e7b4
+    BUSYBOX_SHA256=aa953010f16989cec8e165c5ffddaa9f6633f65670e20d5d7678c987d776f1d7
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://frippery.org/files/busybox/busybox-w32-$BUSYBOX_VERSION.tgz \
- && printf '%s  %s\n' $BUSYBOX_SHA256 busybox-w32-$BUSYBOX_VERSION.tgz \
-    | sha256sum -c \
- && mkdir busybox \
- && tar xzf busybox-w32-$BUSYBOX_VERSION.tgz -C busybox --strip-components=1
+ADD --checksum=sha256:$BUSYBOX_SHA256 \
+    https://github.com/rmyorston/busybox-w32/archive/refs/tags/$BUSYBOX_VERSION.tar.gz \
+    busybox-w32-$BUSYBOX_VERSION.tar.gz
+RUN mkdir busybox \
+ && tar xzf busybox-w32-$BUSYBOX_VERSION.tar.gz -C busybox --strip-components=1 \
+ && echo $BUSYBOX_VERSION >busybox/.frp_describe
 
 FROM base AS dl-vim
 ARG VIM_VERSION=9.0 \
     VIM_SHA256=a6456bc154999d83d0c20d968ac7ba6e7df0d02f3cb6427fb248660bacfb336e
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://mirror.math.princeton.edu/pub/vim/unix/vim-$VIM_VERSION.tar.bz2 \
- && printf '%s  %s\n' $VIM_SHA256 vim-$VIM_VERSION.tar.bz2 | sha256sum -c \
- && mkdir vim \
+ADD --checksum=sha256:$VIM_SHA256 \
+    https://mirror.math.princeton.edu/pub/vim/unix/vim-$VIM_VERSION.tar.bz2 ./
+RUN mkdir vim \
  && tar xjf vim-$VIM_VERSION.tar.bz2 -C vim --strip-components=1
 
 FROM base AS dl-ctags
 ARG CTAGS_VERSION=6.2.1 \
     CTAGS_SHA256=f56829e9a576025e98955597ee967099a871987b3476fbd8dbbc2b9dc921f824
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
+ADD --checksum=sha256:$CTAGS_SHA256 \
     https://github.com/universal-ctags/ctags/archive/refs/tags/v$CTAGS_VERSION.tar.gz \
- && printf '%s  %s\n' $CTAGS_SHA256 ctags-$CTAGS_VERSION.tar.gz | sha256sum -c \
- && mkdir ctags \
+    ctags-$CTAGS_VERSION.tar.gz
+RUN mkdir ctags \
  && tar xzf ctags-$CTAGS_VERSION.tar.gz -C ctags --strip-components=1
 
 FROM base AS dl-zstd
 ARG ZSTD_VERSION=1.5.7 \
     ZSTD_SHA256=eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://github.com/facebook/zstd/releases/download/v$ZSTD_VERSION/zstd-$ZSTD_VERSION.tar.gz \
- && printf '%s  %s\n' \
-      $ZSTD_SHA256 zstd-$ZSTD_VERSION.tar.gz \
-    | sha256sum -c \
- && mkdir zstd \
+ADD --checksum=sha256:$ZSTD_SHA256 \
+    https://github.com/facebook/zstd/releases/download/v$ZSTD_VERSION/zstd-$ZSTD_VERSION.tar.gz ./
+RUN mkdir zstd \
  && tar xzf zstd-$ZSTD_VERSION.tar.gz -C zstd --strip-components=1
 
 FROM base AS dl-ccache
-ARG CCACHE_VERSION=4.13.6 \
-    CCACHE_SHA256=a7de667ca08cf67c3c8af9f213f6aa701a1188a2b3163fb74483858ce5e79fbb \
+ARG CCACHE_VERSION=4.14 \
+    CCACHE_SHA256=b093ac5d38204cb4d9f29b0bbd570675aa5a592a78e6675b2c506dbe045234e7 \
     XXHASH_VERSION=0.8.3 \
     XXHASH_SHA256=aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz \
+ADD --checksum=sha256:$CCACHE_SHA256 \
+    https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz ./
+ADD --checksum=sha256:$XXHASH_SHA256 \
     https://github.com/Cyan4973/xxhash/archive/refs/tags/v$XXHASH_VERSION.tar.gz \
- && printf '%s  %s\n' \
-      $CCACHE_SHA256 ccache-$CCACHE_VERSION.tar.xz \
-      $XXHASH_SHA256 xxHash-$XXHASH_VERSION.tar.gz \
-    | sha256sum -c \
- && mkdir ccache \
+    xxHash-$XXHASH_VERSION.tar.gz
+RUN mkdir ccache \
  && tar xJf ccache-$CCACHE_VERSION.tar.xz -C ccache --strip-components=1 \
  && mkdir xxhash \
  && tar xzf xxHash-$XXHASH_VERSION.tar.gz -C xxhash --strip-components=1
@@ -168,67 +155,86 @@ FROM base AS dl-ninja
 ARG NINJA_VERSION=1.13.2 \
     NINJA_SHA256=974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
+ADD --checksum=sha256:$NINJA_SHA256 \
     https://github.com/ninja-build/ninja/archive/refs/tags/v$NINJA_VERSION.tar.gz \
- && printf '%s  %s\n' $NINJA_SHA256 ninja-$NINJA_VERSION.tar.gz | sha256sum -c \
- && mkdir ninja \
+    ninja-$NINJA_VERSION.tar.gz
+RUN mkdir ninja \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
 ARG CMAKE_VERSION=4.4.2 \
     CMAKE_SHA256=1db9e61e60b6e0874c86386340b910382f3c5e75b9fbfb44d122063129a2789d
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz \
- && printf '%s  %s\n' $CMAKE_SHA256 cmake-$CMAKE_VERSION.tar.gz | sha256sum -c \
- && mkdir cmake \
+ADD --checksum=sha256:$CMAKE_SHA256 \
+    https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz ./
+RUN mkdir cmake \
  && tar xzf cmake-$CMAKE_VERSION.tar.gz -C cmake --strip-components=1
 
 FROM base AS dl-dcmake
 ARG DCMAKE_VERSION=1.7.1 \
     DCMAKE_SHA256=9d7388088cd03fa7d47e287809f86eee28f02fa6f57bbffa2b556f70dcd8adf9
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://github.com/skeeto/dcmake/releases/download/v$DCMAKE_VERSION/dcmake-$DCMAKE_VERSION.tar.gz \
- && printf '%s  %s\n' $DCMAKE_SHA256 dcmake-$DCMAKE_VERSION.tar.gz | sha256sum -c \
- && mkdir dcmake \
+ADD --checksum=sha256:$DCMAKE_SHA256 \
+    https://github.com/skeeto/dcmake/releases/download/v$DCMAKE_VERSION/dcmake-$DCMAKE_VERSION.tar.gz ./
+RUN mkdir dcmake \
  && tar xzf dcmake-$DCMAKE_VERSION.tar.gz -C dcmake --strip-components=1
 
 FROM base AS dl-7z
 ARG Z7_VERSION=2301 \
     Z7_SHA256=356071007360e5a1824d9904993e8b2480b51b570e8c9faf7c0f58ebe4bf9f74
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://downloads.sourceforge.net/project/sevenzip/7-Zip/23.01/7z$Z7_VERSION-src.tar.xz \
- && printf '%s  %s\n' $Z7_SHA256 7z$Z7_VERSION-src.tar.xz | sha256sum -c \
- && mkdir 7z \
+ADD --checksum=sha256:$Z7_SHA256 \
+    https://downloads.sourceforge.net/project/sevenzip/7-Zip/23.01/7z$Z7_VERSION-src.tar.xz ./
+RUN mkdir 7z \
  && tar xJf 7z$Z7_VERSION-src.tar.xz -C 7z
 
 FROM base AS dl-aas-sign
 ARG AAS_SIGN_VERSION=1.1.0 \
     AAS_SIGN_SHA256=4ba127b0434f6e0f8af639e51a0c961e95b5adeb06391dd6ef02445e0b027c3f
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://github.com/skeeto/aas-sign/releases/download/v$AAS_SIGN_VERSION/aas-sign-$AAS_SIGN_VERSION.tar.gz \
- && printf '%s  %s\n' $AAS_SIGN_SHA256 aas-sign-$AAS_SIGN_VERSION.tar.gz | sha256sum -c \
- && mkdir aas-sign \
+ADD --checksum=sha256:$AAS_SIGN_SHA256 \
+    https://github.com/skeeto/aas-sign/releases/download/v$AAS_SIGN_VERSION/aas-sign-$AAS_SIGN_VERSION.tar.gz ./
+RUN mkdir aas-sign \
  && tar xzf aas-sign-$AAS_SIGN_VERSION.tar.gz -C aas-sign --strip-components=1
 
 FROM base AS dl-nsis
 ARG NSIS_VERSION=3.12 \
     NSIS_SHA256=f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186
 WORKDIR /dl
-RUN curl --insecure --location --remote-name-all --remote-header-name \
-    https://downloads.sourceforge.net/project/nsis/NSIS%203/$NSIS_VERSION/nsis-$NSIS_VERSION-src.tar.bz2 \
- && printf '%s  %s\n' $NSIS_SHA256 nsis-$NSIS_VERSION-src.tar.bz2 | sha256sum -c \
- && mkdir nsis \
+ADD --checksum=sha256:$NSIS_SHA256 \
+    https://downloads.sourceforge.net/project/nsis/NSIS%203/$NSIS_VERSION/nsis-$NSIS_VERSION-src.tar.bz2 ./
+RUN mkdir nsis \
  && tar xjf nsis-$NSIS_VERSION-src.tar.bz2 -C nsis --strip-components=1
 
 # Build cross-compiler
 
-FROM dl-cross AS cross
-ARG ARCH=x86_64-w64-mingw32
-ENV ARCH=$ARCH
+FROM dl-cross AS variant-x64
+ENV ARCH=x86_64-w64-mingw32 \
+    GCC_ARCH_FLAG=--with-arch-32=pentium4 \
+    GCC_MULTILIB=enable \
+    CRT_LIB32=enable \
+    CRT_LIB64=enable \
+    GCC_MANIFEST_FLAG="" \
+    BUSYBOX_CONFIG=mingw64u_defconfig \
+    ZSTD_THREAD_FLAG="" \
+    CMAKE_WINNT_C_FLAGS="" \
+    CMAKE_WINNT_CXX_FLAGS="" \
+    NSIS_ARCH=amd64
+
+FROM dl-cross AS variant-x86
+ENV ARCH=i686-w64-mingw32 \
+    GCC_ARCH_FLAG=--with-arch=pentium4 \
+    GCC_MULTILIB=disable \
+    CRT_LIB32=enable \
+    CRT_LIB64=disable \
+    GCC_MANIFEST_FLAG=--disable-win32-utf8-manifest \
+    BUSYBOX_CONFIG=mingw32w_defconfig \
+    ZSTD_THREAD_FLAG=HAVE_THREAD=0 \
+    CMAKE_WINNT_C_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
+    CMAKE_WINNT_CXX_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
+    NSIS_ARCH=x86
+
+FROM variant-${VARIANT} AS cross
 
 WORKDIR /dl/binutils
 COPY src/binutils-*.patch $PREFIX/src/
@@ -272,6 +278,8 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
  && /dl/gcc/configure \
         --prefix=/bootstrap \
         --with-sysroot=/bootstrap \
+        $GCC_ARCH_FLAG \
+        --${GCC_MULTILIB}-multilib \
         --target=$ARCH \
         --enable-static \
         --disable-shared \
@@ -285,7 +293,6 @@ RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-dependency-tracking \
         --disable-nls \
         --disable-lto \
-        --disable-multilib \
         CFLAGS_FOR_TARGET="-O2" \
         CXXFLAGS_FOR_TARGET="-O2" \
         LDFLAGS_FOR_TARGET="-s" \
@@ -304,7 +311,16 @@ RUN mkdir -p $PREFIX/lib \
  && ln $PREFIX/lib/libmemory.a /bootstrap/lib/ \
  && CC=$ARCH-gcc AR=$ARCH-ar DESTDIR=$PREFIX/lib/ \
         sh $PREFIX/src/libchkstk.S \
- && ln $PREFIX/lib/libchkstk.a /bootstrap/lib/
+ && ln $PREFIX/lib/libchkstk.a /bootstrap/lib/ \
+ && if [ "$GCC_MULTILIB" = enable ]; then \
+        mkdir -p $PREFIX/lib32 /bootstrap/lib32 \
+     && CC="$ARCH-gcc -m32" AR=$ARCH-ar DESTDIR=$PREFIX/lib32/ \
+            sh $PREFIX/src/libmemory.c \
+     && ln $PREFIX/lib32/libmemory.a /bootstrap/lib32/ \
+     && CC="$ARCH-gcc -m32" AR=$ARCH-ar DESTDIR=$PREFIX/lib32/ \
+            sh $PREFIX/src/libchkstk.S \
+     && ln $PREFIX/lib32/libchkstk.a /bootstrap/lib32/ ; \
+    fi
 
 WORKDIR /x-mingw-crt
 RUN /dl/mingw/mingw-w64-crt/configure \
@@ -313,8 +329,8 @@ RUN /dl/mingw/mingw-w64-crt/configure \
         --host=$ARCH \
         --with-default-msvcrt=msvcrt-os \
         --disable-dependency-tracking \
-        --disable-lib32 \
-        --enable-lib64 \
+        --${CRT_LIB32}-lib32 \
+        --${CRT_LIB64}-lib64 \
         CFLAGS="-O2" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
@@ -331,6 +347,22 @@ RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
         LDFLAGS="-s" \
  && make -j$(nproc) \
  && make install
+
+WORKDIR /x-winpthreads32
+RUN if [ "$GCC_MULTILIB" = enable ]; then \
+        /dl/mingw/mingw-w64-libraries/winpthreads/configure \
+            --prefix=/bootstrap \
+            --libdir=/bootstrap/lib32 \
+            --with-sysroot=/bootstrap \
+            --host=$ARCH \
+            --enable-static \
+            --disable-shared \
+            CC="$ARCH-gcc -m32" \
+            CFLAGS="-O2" \
+            LDFLAGS="-s" \
+     && make -j$(nproc) \
+     && make install ; \
+    fi
 
 WORKDIR /x-gcc
 RUN make -j$(nproc) \
@@ -350,7 +382,7 @@ RUN /dl/binutils/configure \
         LDFLAGS="-s" \
  && make MAKEINFO=true tooldir=$PREFIX -j$(nproc) \
  && make MAKEINFO=true tooldir=$PREFIX install \
- && rm $PREFIX/bin/elfedit.exe $PREFIX/bin/readelf.exe
+ && rm $PREFIX/bin/dllwrap.exe $PREFIX/bin/elfedit.exe $PREFIX/bin/readelf.exe
 
 WORKDIR /gmp
 RUN /dl/gmp/configure \
@@ -417,8 +449,8 @@ RUN /dl/mingw/mingw-w64-crt/configure \
         --host=$ARCH \
         --with-default-msvcrt=msvcrt-os \
         --disable-dependency-tracking \
-        --disable-lib32 \
-        --enable-lib64 \
+        --${CRT_LIB32}-lib32 \
+        --${CRT_LIB64}-lib64 \
         CFLAGS="-O2" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
@@ -428,7 +460,13 @@ COPY src/threads.c $PREFIX/src/
 COPY src/threads.h $PREFIX/include/
 RUN $ARCH-gcc -c -Oz -I$PREFIX/include/ \
         -ffunction-sections -Wa,--no-pad-sections $PREFIX/src/threads.c \
- && $ARCH-ar r $PREFIX/lib/libmingwex.a threads.o
+ && $ARCH-ar r $PREFIX/lib/libmingwex.a threads.o \
+ && if [ "$GCC_MULTILIB" = enable ]; then \
+        $ARCH-gcc -m32 -c -Oz -I$PREFIX/include/ \
+            -ffunction-sections -Wa,--no-pad-sections \
+            -o threads32.o $PREFIX/src/threads.c \
+     && $ARCH-ar r $PREFIX/lib32/libmingwex.a threads32.o ; \
+    fi
 
 WORKDIR /winpthreads
 RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
@@ -442,6 +480,22 @@ RUN /dl/mingw/mingw-w64-libraries/winpthreads/configure \
  && make -j$(nproc) \
  && make install
 
+WORKDIR /winpthreads32
+RUN if [ "$GCC_MULTILIB" = enable ]; then \
+        /dl/mingw/mingw-w64-libraries/winpthreads/configure \
+            --prefix=$PREFIX \
+            --libdir=$PREFIX/lib32 \
+            --with-sysroot=$PREFIX \
+            --host=$ARCH \
+            --enable-static \
+            --disable-shared \
+            CC="$ARCH-gcc -m32" \
+            CFLAGS="-O2" \
+            LDFLAGS="-s" \
+     && make -j$(nproc) \
+     && make install ; \
+    fi
+
 WORKDIR /gcc
 COPY src/crossgcc-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
@@ -449,6 +503,8 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --prefix=$PREFIX \
         --with-sysroot=$PREFIX \
         --with-native-system-header-dir=/include \
+        $GCC_ARCH_FLAG \
+        --${GCC_MULTILIB}-multilib \
         --target=$ARCH \
         --host=$ARCH \
         --enable-static \
@@ -465,9 +521,9 @@ RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
         --disable-libstdcxx-verbose \
         --disable-dependency-tracking \
         --disable-lto \
-        --disable-multilib \
         --disable-nls \
         --disable-win32-registry \
+        $GCC_MANIFEST_FLAG \
         --enable-mingw-wildcard \
         CFLAGS_FOR_TARGET="-O2" \
         CXXFLAGS_FOR_TARGET="-O2" \
@@ -494,7 +550,7 @@ RUN $ARCH-gcc -DEXE=gcc.exe -DCMD=cc \
  && $ARCH-gcc -DEXE=gcc.exe -DCMD="cc -ansi" \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/c89.exe $PREFIX/src/alias.c -lkernel32 \
- && printf '%s\n' addr2line ar as c++filt cpp dlltool dllwrap g++ \
+ && printf '%s\n' addr2line ar as c++filt cpp dlltool g++ \
       gcc gcc-ar gcc-nm gcc-ranlib gcov gcov-dump gcov-tool gendef gfortran \
       ld nm objcopy objdump ranlib size strings strip uuidgen widl \
       windmc windres \
@@ -503,6 +559,49 @@ RUN $ARCH-gcc -DEXE=gcc.exe -DCMD=cc \
             -Oz -fno-asynchronous-unwind-tables \
             -Wl,--gc-sections -s -nostdlib \
             -o $PREFIX/bin/$ARCH-{}.exe $PREFIX/src/alias.c -lkernel32
+
+# Create i686 tool aliases
+RUN if [ "$GCC_MULTILIB" = enable ]; then \
+    printf '%s\n' addr2line ar c++filt gcc-ar gcc-nm gcc-ranlib gcov \
+        gcov-dump gcov-tool gendef nm objcopy objdump ranlib size strings \
+        strip uuidgen windmc \
+    | xargs -I{} -P$(nproc) \
+          $ARCH-gcc -DEXE={}.exe -DCMD=i686-w64-mingw32-{} \
+            -Oz -fno-asynchronous-unwind-tables \
+            -Wl,--gc-sections -s -nostdlib \
+            -o $PREFIX/bin/i686-w64-mingw32-{}.exe \
+            $PREFIX/src/alias.c -lkernel32 \
+ && printf '%s\n' cpp gcc g++ gfortran \
+    | xargs -I{} -P$(nproc) \
+          $ARCH-gcc -DEXE={}.exe -DCMD="i686-w64-mingw32-{} -m32" \
+            -Oz -fno-asynchronous-unwind-tables \
+            -Wl,--gc-sections -s -nostdlib \
+            -o $PREFIX/bin/i686-w64-mingw32-{}.exe \
+            $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=as.exe -DCMD="i686-w64-mingw32-as --32" \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/i686-w64-mingw32-as.exe \
+        $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=ld.exe -DCMD="i686-w64-mingw32-ld -m i386pe" \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/i686-w64-mingw32-ld.exe \
+        $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=dlltool.exe \
+        -DCMD="i686-w64-mingw32-dlltool -m i386 --as-flags=--32" \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/i686-w64-mingw32-dlltool.exe \
+        $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=widl.exe \
+        -DCMD="i686-w64-mingw32-widl --win32" \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/i686-w64-mingw32-widl.exe \
+        $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=windres.exe \
+        -DCMD="i686-w64-mingw32-windres --target=pe-i386" \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o $PREFIX/bin/i686-w64-mingw32-windres.exe \
+        $PREFIX/src/alias.c -lkernel32 ; \
+    fi
 
 # Build some extra development tools
 
@@ -617,7 +716,7 @@ COPY --from=dl-busybox /dl/ /dl/
 WORKDIR /dl/busybox
 COPY src/busybox-* $PREFIX/src/
 RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
- && make mingw64u_defconfig \
+ && make $BUSYBOX_CONFIG \
  && sed -ri 's/^(CONFIG_AR)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_ASCII)=y/\1=n/' .config \
  && sed -ri -e 's/^(CONFIG_BASH_IS_ASH)=y/\1=n/' \
@@ -712,7 +811,7 @@ RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libzstd.a \
 
 WORKDIR /dl/zstd
 RUN make -j$(nproc) -C programs zstd \
-        CC=$ARCH-gcc CFLAGS="-O2" LDFLAGS="-s" EXT=.exe \
+        CC=$ARCH-gcc CFLAGS="-O2" LDFLAGS="-s" EXT=.exe $ZSTD_THREAD_FLAG \
  && mkdir -p /out/bin \
  && cp programs/zstd.exe /out/bin/ \
  && $ARCH-gcc -DEXE=zstd.exe -DCMD=unzstd \
@@ -722,6 +821,8 @@ RUN make -j$(nproc) -C programs zstd \
 FROM cross AS build-ccache
 COPY --from=dl-ccache /dl/ /dl/
 COPY --from=build-zstd /deps/ /deps/
+COPY src/ccache-*.patch $PREFIX/src/
+RUN cat $PREFIX/src/ccache-*.patch | patch -d/dl/ccache -p1
 
 WORKDIR /dl/xxhash
 RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libxxhash.a \
@@ -805,7 +906,9 @@ COPY --from=build-pdcurses /deps/include/curses.h /deps/include/
 WORKDIR /cmake
 COPY src/cmake-*.patch $PREFIX/src/
 RUN cat $PREFIX/src/cmake-*.patch | patch -d/dl/cmake -p1 \
- && cmake -DCMAKE_BUILD_TYPE=Release \
+ && cmake -DCMAKE_C_FLAGS="$CMAKE_WINNT_C_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$CMAKE_WINNT_CXX_FLAGS" \
+        -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_C_COMPILER=$ARCH-gcc \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
@@ -870,7 +973,7 @@ RUN sed -i 's/\r$//' Source/build.cpp \
  && cat $PREFIX/src/nsis-*.patch | patch -p1 \
  && scons -j$(nproc) \
         XGCC_W32_PREFIX=$ARCH- \
-        TARGET_ARCH=amd64 \
+        TARGET_ARCH=$NSIS_ARCH \
         PREFIX=$PREFIX \
         PREFIX_BIN=$PREFIX/share/nsis/bin \
         PREFIX_DATA=$PREFIX/share/nsis \
@@ -881,6 +984,54 @@ RUN sed -i 's/\r$//' Source/build.cpp \
         ZLIB_W32=/deps \
         install-compiler install-stubs install-includes install-plugins \
         install-contrib install-utils
+
+# Also provide x86 stubs and plugins in the multilib kit so makensis
+# can produce 32-bit installers ("Target x86-unicode"). NSIS never
+# passes -m32 itself and derives every tool name from XGCC_W32_PREFIX,
+# so present the multilib compiler through an i686 interface, wrapper
+# scripts mirroring the kit's own i686 aliases. The wrappers embed
+# absolute tool paths because scons scrubs the PATH of its
+# subprocesses down to the directory holding the prefixed tools, so
+# they cannot find /bootstrap/bin themselves. NSIS's zlib configure
+# probe runs even for stub-only targets and link-tests with -m32, so
+# it needs a 32-bit libz.a, built from Binutils' bundled zlib exactly
+# like the 64-bit copy in /deps.
+RUN if [ "$GCC_MULTILIB" = enable ]; then \
+        printf '#!/bin/sh\nexec %s -m32 "$@"\n' "$(command -v $ARCH-gcc)" \
+            >/usr/local/bin/i686-w64-mingw32-gcc \
+     && printf '#!/bin/sh\nexec %s -m32 "$@"\n' "$(command -v $ARCH-g++)" \
+            >/usr/local/bin/i686-w64-mingw32-g++ \
+     && printf '#!/bin/sh\nexec %s --32 "$@"\n' "$(command -v $ARCH-as)" \
+            >/usr/local/bin/i686-w64-mingw32-as \
+     && printf '#!/bin/sh\nexec %s --target=pe-i386 "$@"\n' \
+            "$(command -v $ARCH-windres)" \
+            >/usr/local/bin/i686-w64-mingw32-windres \
+     && printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v $ARCH-ar)" \
+            >/usr/local/bin/i686-w64-mingw32-ar \
+     && printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v $ARCH-ranlib)" \
+            >/usr/local/bin/i686-w64-mingw32-ranlib \
+     && chmod +x /usr/local/bin/i686-w64-mingw32-* \
+     && mkdir -p /zlib32 /deps32/lib /deps32/include \
+     && (cd /zlib32 \
+         && /dl/binutils/zlib/configure --host=i686-w64-mingw32 \
+                CFLAGS="-O2" \
+         && make -j$(nproc) libz.a \
+         && cp libz.a /deps32/lib/ \
+         && cp /dl/binutils/zlib/zlib.h /dl/binutils/zlib/zconf.h \
+               /deps32/include/) \
+     && scons -j$(nproc) \
+            XGCC_W32_PREFIX=i686-w64-mingw32- \
+            TARGET_ARCH=x86 \
+            PREFIX=$PREFIX \
+            PREFIX_BIN=$PREFIX/share/nsis/bin \
+            PREFIX_DATA=$PREFIX/share/nsis \
+            NSIS_CONFIG_CONST_DATA_PATH=no \
+            PREFIX_DEST=/out \
+            SKIPDOC=all \
+            SKIPUTILS="NSIS Menu,Makensisw,VPatch/Source/GenPat,MakeLangId,zip2exe" \
+            ZLIB_W32=/deps32 \
+            install-stubs install-plugins ; \
+    fi
 
 # Collect source tarballs
 FROM base AS source
@@ -974,8 +1125,7 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
 # at `docker run` time so secrets never enter the build cache.
 FROM final AS signed
 # aas-sign reaches GitHub OIDC and Azure over HTTPS at run time and
-# needs the system trust store. The build stages all pass --insecure
-# to curl, so ca-certificates isn't pulled in by base.
+# needs the system trust store.
 RUN apt-get update \
  && apt-get install --yes --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
