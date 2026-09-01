@@ -8,7 +8,7 @@ ENV PREFIX=$PREFIX
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
   build-essential cmake libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full \
-  python3 scons
+  python3 quilt scons
 
 COPY src/w64devkit.ico src/alias.c $PREFIX/src/
 
@@ -59,9 +59,9 @@ RUN mkdir binutils \
 FROM base AS dl-gdb
 ARG GDB_VERSION=17.2 \
     GDB_SHA256=1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c \
-    EXPAT_VERSION=2.8.3 \
-    EXPAT_TAG=R_2_8_3 \
-    EXPAT_SHA256=f6256df90c906773d344da084402b7d3e4f22ed41b1a59c989098a83d3ea0c85 \
+    EXPAT_VERSION=2.8.4 \
+    EXPAT_TAG=R_2_8_4 \
+    EXPAT_SHA256=656ae1cc8da3b4ea513bb4e254f33e6243938084c0ec6239da873376b09985a7 \
     LIBICONV_VERSION=1.19 \
     LIBICONV_SHA256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 WORKDIR /dl
@@ -162,8 +162,8 @@ RUN mkdir ninja \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
-ARG CMAKE_VERSION=4.4.2 \
-    CMAKE_SHA256=1db9e61e60b6e0874c86386340b910382f3c5e75b9fbfb44d122063129a2789d
+ARG CMAKE_VERSION=4.4.3 \
+    CMAKE_SHA256=c46400618b4f1f2b43507f24fb22f3ae830c3416cf23b776e16e1d413aa892f0
 WORKDIR /dl
 ADD --checksum=sha256:$CMAKE_SHA256 \
     https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz ./
@@ -237,10 +237,15 @@ ENV ARCH=i686-w64-mingw32 \
 FROM variant-${VARIANT} AS cross
 
 WORKDIR /dl/binutils
-COPY src/binutils-*.patch $PREFIX/src/
+COPY src/binutils/ $PREFIX/src/binutils/
+# Patch queues are applied with quilt, ordered by each queue's series
+# file. The .pc/ state is removed after each push: source trees are
+# never popped, and a stale .pc would block pushing a second queue
+# onto the same tree later (gcc then crossgcc, mingw then gendef).
 RUN sed -ri 's/(static bool insert_timestamp = )/\1!/' ld/emultempl/pe*.em \
  && sed -ri 's/(int pe_enable_stdcall_fixup = )/\1!!/' ld/emultempl/pe*.em \
- && cat $PREFIX/src/binutils-*.patch | patch -p1
+ && QUILT_PATCHES=$PREFIX/src/binutils quilt push -a \
+ && rm -rf .pc
 WORKDIR /x-binutils
 RUN /dl/binutils/configure \
         --prefix=/bootstrap \
@@ -256,8 +261,10 @@ RUN /dl/binutils/configure \
 # https://sourceforge.net/p/mingw-w64/bugs/821/
 RUN sed -i /OpenThreadToken/d /dl/mingw/mingw-w64-crt/lib32/kernel32.def
 
-COPY src/mingw-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/mingw-*.patch | patch -d/dl/mingw -p1
+COPY src/mingw/ $PREFIX/src/mingw/
+RUN cd /dl/mingw \
+ && QUILT_PATCHES=$PREFIX/src/mingw quilt push -a \
+ && rm -rf .pc
 
 WORKDIR /x-mingw-headers
 RUN printf '#include <crtdefs.h>\n#if __has_include_next(<stddef.h>)\n#include_next <stddef.h>\n#endif\n' \
@@ -273,8 +280,10 @@ WORKDIR /bootstrap
 RUN ln -s /bootstrap mingw
 
 WORKDIR /x-gcc
-COPY src/gcc-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/gcc-*.patch | patch -d/dl/gcc -p1 \
+COPY src/gcc/ $PREFIX/src/gcc/
+RUN (cd /dl/gcc \
+     && QUILT_PATCHES=$PREFIX/src/gcc quilt push -a \
+     && rm -rf .pc) \
  && /dl/gcc/configure \
         --prefix=/bootstrap \
         --with-sysroot=/bootstrap \
@@ -497,8 +506,10 @@ RUN if [ "$GCC_MULTILIB" = enable ]; then \
     fi
 
 WORKDIR /gcc
-COPY src/crossgcc-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/crossgcc-*.patch | patch -d/dl/gcc -p1 \
+COPY src/crossgcc/ $PREFIX/src/crossgcc/
+RUN (cd /dl/gcc \
+     && QUILT_PATCHES=$PREFIX/src/crossgcc quilt push -a \
+     && rm -rf .pc) \
  && /dl/gcc/configure \
         --prefix=$PREFIX \
         --with-sysroot=$PREFIX \
@@ -608,8 +619,10 @@ RUN if [ "$GCC_MULTILIB" = enable ]; then \
 FROM cross AS build-gendef
 
 WORKDIR /mingw-tools/gendef
-COPY src/gendef-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/gendef-*.patch | patch -d/dl/mingw -p1 \
+COPY src/gendef/ $PREFIX/src/gendef/
+RUN (cd /dl/mingw \
+     && QUILT_PATCHES=$PREFIX/src/gendef quilt push -a \
+     && rm -rf .pc) \
  && /dl/mingw/mingw-w64-tools/gendef/configure \
         --host=$ARCH \
         CFLAGS="-O2" \
@@ -678,8 +691,10 @@ RUN /dl/libiconv/configure \
  && make install
 
 WORKDIR /gdb
-COPY src/gdb-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/gdb-*.patch | patch -d/dl/gdb -p1 \
+COPY src/gdb/ $PREFIX/src/gdb/
+RUN (cd /dl/gdb \
+     && QUILT_PATCHES=$PREFIX/src/gdb quilt push -a \
+     && rm -rf .pc) \
  && sed -i 's/quiet = 0/quiet = 1/' /dl/gdb/gdb/main.c \
  && /dl/gdb/configure \
         --host=$ARCH \
@@ -695,8 +710,10 @@ FROM cross AS build-make
 COPY --from=dl-make /dl/ /dl/
 
 WORKDIR /make
-COPY src/make-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/make-*.patch | patch -d/dl/make -p1 \
+COPY src/make/ $PREFIX/src/make/
+RUN (cd /dl/make \
+     && QUILT_PATCHES=$PREFIX/src/make quilt push -a \
+     && rm -rf .pc) \
  && /dl/make/configure \
         --host=$ARCH \
         --disable-nls \
@@ -714,8 +731,10 @@ FROM cross AS build-busybox
 COPY --from=dl-busybox /dl/ /dl/
 
 WORKDIR /dl/busybox
-COPY src/busybox-* $PREFIX/src/
-RUN cat $PREFIX/src/busybox-*.patch | patch -p1 \
+COPY src/busybox/ $PREFIX/src/busybox/
+COPY src/busybox-alias.c $PREFIX/src/
+RUN QUILT_PATCHES=$PREFIX/src/busybox quilt push -a \
+ && rm -rf .pc \
  && make $BUSYBOX_CONFIG \
  && sed -ri 's/^(CONFIG_AR)=y/\1=n/' .config \
  && sed -ri 's/^(CONFIG_ASCII)=y/\1=n/' .config \
@@ -764,8 +783,10 @@ FROM cross AS build-vim
 COPY --from=dl-vim /dl/ /dl/
 
 WORKDIR /dl/vim
-COPY src/rexxd.c src/vim-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/vim-*.patch | patch -p1 \
+COPY src/rexxd.c $PREFIX/src/
+COPY src/vim/ $PREFIX/src/vim/
+RUN QUILT_PATCHES=$PREFIX/src/vim quilt push -a \
+ && rm -rf .pc \
  && ARCH= make -C src -j$(nproc) -f Make_ming.mak CC="$ARCH-gcc -std=gnu17" \
         OPTIMIZE=SPEED STATIC_STDCPLUS=yes HAS_GCC_EH=no \
         UNDER_CYGWIN=yes CROSS=yes CROSS_COMPILE=$ARCH- \
@@ -791,8 +812,9 @@ FROM cross AS build-ctags
 COPY --from=dl-ctags /dl/ /dl/
 
 WORKDIR /dl/ctags
-COPY src/ctags-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/ctags-*.patch | patch -p1 \
+COPY src/ctags/ $PREFIX/src/ctags/
+RUN QUILT_PATCHES=$PREFIX/src/ctags quilt push -a \
+ && rm -rf .pc \
  && sed -i /RT_MANIFEST/d win32/ctags.rc \
  && make -j$(nproc) -f mk_mingw.mak CC=gcc packcc.exe \
  && make -j$(nproc) -f mk_mingw.mak \
@@ -821,8 +843,10 @@ RUN make -j$(nproc) -C programs zstd \
 FROM cross AS build-ccache
 COPY --from=dl-ccache /dl/ /dl/
 COPY --from=build-zstd /deps/ /deps/
-COPY src/ccache-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/ccache-*.patch | patch -d/dl/ccache -p1
+COPY src/ccache/ $PREFIX/src/ccache/
+RUN cd /dl/ccache \
+ && QUILT_PATCHES=$PREFIX/src/ccache quilt push -a \
+ && rm -rf .pc
 
 WORKDIR /dl/xxhash
 RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libxxhash.a \
@@ -870,10 +894,12 @@ RUN $ARCH-gcc -DEXE=ccache.exe -DCMD=gcc \
 
 FROM cross AS build-ninja
 COPY --from=dl-ninja /dl/ /dl/
-COPY src/ninja-*.patch $PREFIX/src/
+COPY src/ninja/ $PREFIX/src/ninja/
 
 WORKDIR /ninja
-RUN cat $PREFIX/src/ninja-*.patch | patch -d/dl/ninja -p1 \
+RUN (cd /dl/ninja \
+     && QUILT_PATCHES=$PREFIX/src/ninja quilt push -a \
+     && rm -rf .pc) \
  && cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_SYSTEM_NAME=Windows \
         -DCMAKE_CXX_COMPILER=$ARCH-g++ \
@@ -904,8 +930,10 @@ COPY --from=build-pdcurses /deps/lib/libcurses.a /deps/lib/
 COPY --from=build-pdcurses /deps/include/curses.h /deps/include/
 
 WORKDIR /cmake
-COPY src/cmake-*.patch $PREFIX/src/
-RUN cat $PREFIX/src/cmake-*.patch | patch -d/dl/cmake -p1 \
+COPY src/cmake/ $PREFIX/src/cmake/
+RUN (cd /dl/cmake \
+     && QUILT_PATCHES=$PREFIX/src/cmake quilt push -a \
+     && rm -rf .pc) \
  && cmake -DCMAKE_C_FLAGS="$CMAKE_WINNT_C_FLAGS" \
         -DCMAKE_CXX_FLAGS="$CMAKE_WINNT_CXX_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -965,12 +993,13 @@ RUN cmake -B /aas-sign-build-w32 -S /dl/aas-sign \
 
 FROM cross AS build-nsis
 COPY --from=dl-nsis /dl/nsis /dl/nsis
-COPY src/nsis-*.patch $PREFIX/src/
+COPY src/nsis/ $PREFIX/src/nsis/
 WORKDIR /dl/nsis
 # Source/build.cpp ships with CRLF line endings; everything else in
 # the tree is LF. Strip the carriage returns so our LF patch applies.
 RUN sed -i 's/\r$//' Source/build.cpp \
- && cat $PREFIX/src/nsis-*.patch | patch -p1 \
+ && QUILT_PATCHES=$PREFIX/src/nsis quilt push -a \
+ && rm -rf .pc \
  && scons -j$(nproc) \
         XGCC_W32_PREFIX=$ARCH- \
         TARGET_ARCH=$NSIS_ARCH \
