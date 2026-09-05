@@ -241,7 +241,7 @@ COPY src/binutils/ $PREFIX/src/binutils/
 # Patch queues are applied with quilt, ordered by each queue's series
 # file. The .pc/ state is removed after each push: source trees are
 # never popped, and a stale .pc would block pushing a second queue
-# onto the same tree later (gcc then crossgcc, mingw then gendef).
+# onto the same tree later (gcc then gcc-final, mingw then gendef).
 RUN sed -ri 's/(static bool insert_timestamp = )/\1!/' ld/emultempl/pe*.em \
  && sed -ri 's/(int pe_enable_stdcall_fixup = )/\1!!/' ld/emultempl/pe*.em \
  && QUILT_PATCHES=$PREFIX/src/binutils quilt push -a \
@@ -506,9 +506,9 @@ RUN if [ "$GCC_MULTILIB" = enable ]; then \
     fi
 
 WORKDIR /gcc
-COPY src/crossgcc/ $PREFIX/src/crossgcc/
+COPY src/gcc-final/ $PREFIX/src/gcc-final/
 RUN (cd /dl/gcc \
-     && QUILT_PATCHES=$PREFIX/src/crossgcc quilt push -a \
+     && QUILT_PATCHES=$PREFIX/src/gcc-final quilt push -a \
      && rm -rf .pc) \
  && /dl/gcc/configure \
         --prefix=$PREFIX \
