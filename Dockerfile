@@ -1,4 +1,4 @@
-ARG VERSION=2.9.1 \
+ARG VERSION=2.10.1 \
     PREFIX=/w64devkit
 ARG VARIANT=x64
 
@@ -8,7 +8,7 @@ ENV PREFIX=$PREFIX
 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
   build-essential cmake libgmp-dev libmpc-dev libmpfr-dev m4 p7zip-full \
-  python3 quilt scons
+  python3 scons
 
 COPY src/w64devkit.ico src/alias.c $PREFIX/src/
 
@@ -57,11 +57,11 @@ RUN mkdir binutils \
  && tar xjf mingw-w64-v$MINGW_VERSION.tar.bz2 -C mingw --strip-components=1
 
 FROM base AS dl-gdb
-ARG GDB_VERSION=17.2 \
-    GDB_SHA256=1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c \
-    EXPAT_VERSION=2.8.4 \
-    EXPAT_TAG=R_2_8_4 \
-    EXPAT_SHA256=656ae1cc8da3b4ea513bb4e254f33e6243938084c0ec6239da873376b09985a7 \
+ARG GDB_VERSION=18.1 \
+    GDB_SHA256=cd9fc3fe2b47743840e42c1592d3d87f8302eb18639c0b8b4ba0898002e2348f \
+    EXPAT_VERSION=2.9.0 \
+    EXPAT_TAG=R_2_9_0 \
+    EXPAT_SHA256=1e6371862cc31999b368c3b89b49994f0677e1bab5f1b2b85ae3741f5d803051 \
     LIBICONV_VERSION=1.19 \
     LIBICONV_SHA256=88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6
 WORKDIR /dl
@@ -135,11 +135,29 @@ ADD --checksum=sha256:$ZSTD_SHA256 \
 RUN mkdir zstd \
  && tar xzf zstd-$ZSTD_VERSION.tar.gz -C zstd --strip-components=1
 
+FROM base AS dl-tugz
+ARG TUGZ_VERSION=1.0.0 \
+    TUGZ_SHA256=c21a61a06c1ab2ccbbf018fcbf8ec8144483021467fe65aeb7206d014b934dca
+WORKDIR /dl
+ADD --checksum=sha256:$TUGZ_SHA256 \
+    https://github.com/skeeto/tugz/releases/download/v$TUGZ_VERSION/tugz-amalgams-$TUGZ_VERSION.zip ./
+RUN 7z x tugz-amalgams-$TUGZ_VERSION.zip \
+ && mv tugz-amalgams-$TUGZ_VERSION tugz
+
+FROM base AS dl-quilt
+ARG QUILT_VERSION=0.69.3 \
+    QUILT_SHA256=893973b92ca541d85b86a389a1ba43528ca48ec40e2b19b127c3660a4ffcfaed
+WORKDIR /dl
+ADD --checksum=sha256:$QUILT_SHA256 \
+    https://github.com/skeeto/quilt.cpp/releases/download/v$QUILT_VERSION/quilt-$QUILT_VERSION.tar.gz ./
+RUN mkdir quilt \
+ && tar xzf quilt-$QUILT_VERSION.tar.gz -C quilt --strip-components=1
+
 FROM base AS dl-ccache
-ARG CCACHE_VERSION=4.14 \
-    CCACHE_SHA256=b093ac5d38204cb4d9f29b0bbd570675aa5a592a78e6675b2c506dbe045234e7 \
-    XXHASH_VERSION=0.8.3 \
-    XXHASH_SHA256=aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80
+ARG CCACHE_VERSION=4.14.1 \
+    CCACHE_SHA256=29f10de481ac2c41c91bfabead63d803bd2fe823e09752aade5b0b8704cc4f30 \
+    XXHASH_VERSION=0.8.4 \
+    XXHASH_SHA256=5738270935e7c3d38a79b3adf7c9692566ce7895a25f67de43ad52ab504acd32
 WORKDIR /dl
 ADD --checksum=sha256:$CCACHE_SHA256 \
     https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz ./
@@ -162,8 +180,8 @@ RUN mkdir ninja \
  && tar xzf ninja-$NINJA_VERSION.tar.gz -C ninja --strip-components=1
 
 FROM base AS dl-cmake
-ARG CMAKE_VERSION=4.4.3 \
-    CMAKE_SHA256=c46400618b4f1f2b43507f24fb22f3ae830c3416cf23b776e16e1d413aa892f0
+ARG CMAKE_VERSION=4.4.4 \
+    CMAKE_SHA256=bd24c30d80a7744ae84b845ff080cc8453b06c622ef01066564108e9cefc44cf
 WORKDIR /dl
 ADD --checksum=sha256:$CMAKE_SHA256 \
     https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION.tar.gz ./
@@ -198,8 +216,8 @@ RUN mkdir aas-sign \
  && tar xzf aas-sign-$AAS_SIGN_VERSION.tar.gz -C aas-sign --strip-components=1
 
 FROM base AS dl-nsis
-ARG NSIS_VERSION=3.12 \
-    NSIS_SHA256=f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186
+ARG NSIS_VERSION=3.13 \
+    NSIS_SHA256=a8ffe024602d46b6d766f9e1ce30c324ad2a24daeacd3efc2642d436a0c157ac
 WORKDIR /dl
 ADD --checksum=sha256:$NSIS_SHA256 \
     https://downloads.sourceforge.net/project/nsis/NSIS%203/$NSIS_VERSION/nsis-$NSIS_VERSION-src.tar.bz2 ./
@@ -234,14 +252,24 @@ ENV ARCH=i686-w64-mingw32 \
     CMAKE_WINNT_CXX_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
     NSIS_ARCH=x86
 
+# Quilt.cpp for the build host, which applies every patch queue below.
+# The same build generates the amalgamation for the distributed quilt.exe.
+FROM base AS host-quilt
+COPY --from=dl-quilt /dl/quilt /dl/quilt
+WORKDIR /x-quilt
+RUN cmake -S /dl/quilt -B . -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build . -j$(nproc) --target quilt amalgam \
+ && install -s quilt /usr/local/bin/
+
 FROM variant-${VARIANT} AS cross
+COPY --from=host-quilt /usr/local/bin/quilt /usr/local/bin/
 
 WORKDIR /dl/binutils
 COPY src/binutils/ $PREFIX/src/binutils/
 # Patch queues are applied with quilt, ordered by each queue's series
 # file. The .pc/ state is removed after each push: source trees are
 # never popped, and a stale .pc would block pushing a second queue
-# onto the same tree later (gcc then gcc-final, mingw then gendef).
+# onto the same tree later (gcc then gcc-final).
 RUN sed -ri 's/(static bool insert_timestamp = )/\1!/' ld/emultempl/pe*.em \
  && sed -ri 's/(int pe_enable_stdcall_fixup = )/\1!!/' ld/emultempl/pe*.em \
  && QUILT_PATCHES=$PREFIX/src/binutils quilt push -a \
@@ -619,11 +647,7 @@ RUN if [ "$GCC_MULTILIB" = enable ]; then \
 FROM cross AS build-gendef
 
 WORKDIR /mingw-tools/gendef
-COPY src/gendef/ $PREFIX/src/gendef/
-RUN (cd /dl/mingw \
-     && QUILT_PATCHES=$PREFIX/src/gendef quilt push -a \
-     && rm -rf .pc) \
- && /dl/mingw/mingw-w64-tools/gendef/configure \
+RUN /dl/mingw/mingw-w64-tools/gendef/configure \
         --host=$ARCH \
         CFLAGS="-O2" \
         LDFLAGS="-s" \
@@ -645,10 +669,10 @@ RUN ./configure \
         $PREFIX/src/uuidgen.c -lmemory
 
 FROM cross AS build-quilt
-COPY src/quilt.cpp $PREFIX/src/
+COPY --from=host-quilt /x-quilt/quilt.cpp /out/src/
 RUN mkdir -p /out/bin \
  && $ARCH-g++ -std=c++20 -O2 -fno-exceptions -s \
-        -o /out/bin/quilt.exe $PREFIX/src/quilt.cpp
+        -o /out/bin/quilt.exe /out/src/quilt.cpp
 
 # Build PDCurses once and reuse it for both gdb and ccmake.
 FROM cross AS build-pdcurses
@@ -656,7 +680,7 @@ COPY --from=dl-pdcurses /dl/pdcurses /dl/pdcurses
 
 WORKDIR /dl/pdcurses
 RUN make -j$(nproc) -C wincon \
-       CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-I.. -O2 -DPDC_WIDE" pdcurses.a \
+       CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-I.. -O2 -DPDC_WIDE -DPDC_FORCE_UTF8" pdcurses.a \
  && mkdir -p /deps/lib /deps/include \
  && cp wincon/pdcurses.a /deps/lib/libcurses.a \
  && cp curses.h /deps/include/curses.h
@@ -732,30 +756,17 @@ COPY --from=dl-busybox /dl/ /dl/
 
 WORKDIR /dl/busybox
 COPY src/busybox/ $PREFIX/src/busybox/
-COPY src/busybox-alias.c $PREFIX/src/
+COPY src/busybox-alias.c src/busybox.config $PREFIX/src/
+# Kconfig keeps the first assignment of each symbol, so prepended overrides
+# win over the stock defconfig. Then fail if any override did not survive
+# (unknown symbol, out of range, unmet dependency).
 RUN QUILT_PATCHES=$PREFIX/src/busybox quilt push -a \
  && rm -rf .pc \
- && make $BUSYBOX_CONFIG \
- && sed -ri 's/^(CONFIG_AR)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_ASCII)=y/\1=n/' .config \
- && sed -ri -e 's/^(CONFIG_BASH_IS_ASH)=y/\1=n/' \
-            -e 's/^# (CONFIG_BASH_IS_NONE) is not set/\1=y/' .config \
- && sed -ri 's/^(CONFIG_CRON\w*)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_DPKG\w*)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_FEATURE_FAIL_IF_UTF8_MANIFEST_UNSUPPORTED)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_FTP\w*)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_LINK)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_MAN)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_MAKE)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_PDPMAKE)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_RPM\w*)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_STRINGS)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_TEST2)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_TSORT)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_UNLINK)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_UUIDGEN)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_VI)=y/\1=n/' .config \
- && sed -ri 's/^(CONFIG_XXD)=y/\1=n/' .config \
+ && cat $PREFIX/src/busybox.config configs/$BUSYBOX_CONFIG \
+        >configs/w64devkit_defconfig \
+ && make w64devkit_defconfig \
+ && ! grep -x 'CONFIG_.*\|# CONFIG_.* is not set' $PREFIX/src/busybox.config \
+      | grep -vxFf .config \
  && make -j$(nproc) CROSS_COMPILE=$ARCH- \
     CONFIG_EXTRA_CFLAGS="-D_WIN32_WINNT=0x502" \
  && mkdir -p /out/bin \
@@ -767,16 +778,16 @@ RUN $ARCH-gcc -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s \
  && printf '%s\n' arch ash awk base32 base64 basename bc bunzip2 bzcat \
       bzip2 cal cat chattr chmod cksum clear cmp comm cp cpio crc32 cut date \
       dc dd df diff dirname dos2unix du echo ed egrep env expand expr factor \
-      false fgrep find fold free fsync getopt grep groups gunzip gzip hd \
-      head hexdump httpd iconv id inotifyd install ipcalc jn join kill killall \
+      false fgrep find fold free fsync getopt grep groups hd head hexdump \
+      httpd iconv id inotifyd install ipcalc jn join kill killall \
       lash less ln logname ls lsattr lzcat lzma lzop lzopcat md5sum mkdir \
       mktemp mv nc nl nproc od paste patch pgrep pidof pipe_progress pkill \
       printenv printf ps pwd readlink realpath reset rev rm rmdir sed seq sh \
       sha1sum sha256sum sha3sum sha512sum shred shuf sleep sort split \
       ssl_client stat su sum sync tac tail tar tee test time timeout touch \
       tr true truncate ts ttysize uname uncompress unexpand uniq unix2dos \
-      unlzma unlzop unxz unzip uptime usleep uudecode uuencode watch \
-      wc wget which whoami whois xargs xz xzcat yes zcat \
+      unlzma unlzop unxz uptime usleep uudecode uuencode watch \
+      wc wget which whoami whois xargs xz xzcat yes \
     | xargs -I{} cp alias.exe /out/bin/{}.exe
 
 FROM cross AS build-vim
@@ -839,6 +850,21 @@ RUN make -j$(nproc) -C programs zstd \
  && $ARCH-gcc -DEXE=zstd.exe -DCMD=unzstd \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o /out/bin/unzstd.exe $PREFIX/src/alias.c -lkernel32
+
+FROM cross AS build-tugz
+COPY --from=dl-tugz /dl/ /dl/
+
+WORKDIR /dl/tugz
+RUN mkdir -p /out/bin \
+ && printf '%s\n' gzip unzip zip \
+    | xargs -I{} -P$(nproc) \
+          $ARCH-gcc -O2 -nostartfiles -s -o /out/bin/{}.exe {}.c -lmemory \
+ && printf '%s\n' gunzip zcat \
+    | xargs -I{} -P$(nproc) \
+          $ARCH-gcc -DEXE=gzip.exe -DCMD={} \
+            -Oz -fno-asynchronous-unwind-tables \
+            -Wl,--gc-sections -s -nostdlib \
+            -o /out/bin/{}.exe $PREFIX/src/alias.c -lkernel32
 
 FROM cross AS build-ccache
 COPY --from=dl-ccache /dl/ /dl/
@@ -995,10 +1021,7 @@ FROM cross AS build-nsis
 COPY --from=dl-nsis /dl/nsis /dl/nsis
 COPY src/nsis/ $PREFIX/src/nsis/
 WORKDIR /dl/nsis
-# Source/build.cpp ships with CRLF line endings; everything else in
-# the tree is LF. Strip the carriage returns so our LF patch applies.
-RUN sed -i 's/\r$//' Source/build.cpp \
- && QUILT_PATCHES=$PREFIX/src/nsis quilt push -a \
+RUN QUILT_PATCHES=$PREFIX/src/nsis quilt push -a \
  && rm -rf .pc \
  && scons -j$(nproc) \
         XGCC_W32_PREFIX=$ARCH- \
@@ -1072,6 +1095,8 @@ COPY --from=dl-busybox /dl/*.* /source/
 COPY --from=dl-vim /dl/*.* /source/
 COPY --from=dl-ctags /dl/*.* /source/
 COPY --from=dl-zstd /dl/*.* /source/
+COPY --from=dl-tugz /dl/*.* /source/
+COPY --from=dl-quilt /dl/*.* /source/
 COPY --from=dl-ccache /dl/*.* /source/
 COPY --from=dl-ninja /dl/*.* /source/
 COPY --from=dl-cmake /dl/*.* /source/
@@ -1093,6 +1118,7 @@ COPY --from=build-busybox /out/ $PREFIX/
 COPY --from=build-vim /out/ $PREFIX/
 COPY --from=build-ctags /out/ $PREFIX/
 COPY --from=build-zstd /out/ $PREFIX/
+COPY --from=build-tugz /out/ $PREFIX/
 COPY --from=build-ccache /out/ $PREFIX/
 COPY --from=build-ninja /out/ $PREFIX/
 COPY --from=build-dcmake /out/ $PREFIX/
@@ -1139,6 +1165,10 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
  && $ARCH-gcc -DEXE=../share/nsis/bin/makensis.exe -DCMD=makensis \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/makensis.exe $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc \
+        -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
+        -s -nostdlib -o $PREFIX/bin/make2compdb.exe $PREFIX/src/make2compdb.c \
+        -lkernel32 -lshell32 -lmemory \
  && sed -i s/'\<ARCH\>'/$ARCH/g $PREFIX/etc/profile \
  && mkdir -p $PREFIX/lib/pkgconfig \
  && cp /dl/mingw/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt \

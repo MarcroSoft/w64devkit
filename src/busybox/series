@@ -4,3 +4,5 @@ default-noiconify.patch
 system-profile.patch
 zstd.patch
 mkdtemp.patch
+history-limit.patch
+gzip.patch
