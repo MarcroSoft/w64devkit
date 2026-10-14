@@ -24,8 +24,7 @@ afterwards and the last -O flag wins; change that -O2 to -Os directly.
 
 --- a/SCons/Config/gnu
 +++ b/SCons/Config/gnu
-@@ -100,6 +100,11 @@
- stub_env.Append(CPPPATH = ['#$BUILD_CONFIG'])
+@@ -103,6 +103,11 @@
  
  if not defenv['DEBUG']:
  	stub_env.Append(CCFLAGS = ['-Os'])                # optimize for size
@@ -36,16 +35,18 @@ afterwards and the last -O flag wins; change that -O2 to -Os directly.
 +	stub_env.Append(LINKFLAGS = ['-Wl,--gc-sections'])# prune unreferenced sections
  stub_env.Append(CCFLAGS = ['-Wall'])                # all warnings
  stub_env.Append(CCFLAGS = ['-xc'])                  # force compile as c
-@@ -126,5 +131,5 @@
+ stub_env.Append(CCFLAGS = ['-fno-strict-aliasing']) # not safe for strict aliasing
+@@ -130,7 +135,7 @@
  makensis_env.Append(CPPPATH = ['#$BUILD_CONFIG'])
  
  if not defenv['DEBUG']:
 -	makensis_env.Append(CCFLAGS = ['-O2'])                # optimize
 +	makensis_env.Append(CCFLAGS = ['-Os'])                # optimize for size
  makensis_env.Append(CFLAGS = ['-Wall'])                   # all warnings
-@@ -144,6 +149,10 @@
- cross_env(plugin_env)
-
+ makensis_env.Append(CXXFLAGS = ['-Wno-non-virtual-dtor']) # ignore virtual dtor warnings
+ makensis_env.Append(CXXFLAGS = ['-Wall'])                 # all warnings
+@@ -149,6 +154,10 @@
+ 
  if not defenv['DEBUG']:
  	plugin_env.Append(CCFLAGS = ['-Os'])              # optimize for size
 +	plugin_env.Append(CCFLAGS = ['-Oz'])              # prefer size over speed harder
@@ -54,3 +55,4 @@ afterwards and the last -O flag wins; change that -O2 to -Os directly.
 +	plugin_env.Append(LINKFLAGS = ['-Wl,--gc-sections'])# prune unreferenced sections
  plugin_env.Append(CCFLAGS = ['-Wall'])              # level 3 warnings
  plugin_env.Append(CCFLAGS = ['-fno-strict-aliasing']) # not safe for strict aliasing
+ 
