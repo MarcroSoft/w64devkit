@@ -124,7 +124,8 @@ ADD --checksum=sha256:$CTAGS_SHA256 \
     https://github.com/universal-ctags/ctags/archive/refs/tags/v$CTAGS_VERSION.tar.gz \
     ctags-$CTAGS_VERSION.tar.gz
 RUN mkdir ctags \
- && tar xzf ctags-$CTAGS_VERSION.tar.gz -C ctags --strip-components=1
+ && tar xzf ctags-$CTAGS_VERSION.tar.gz -C ctags --strip-components=1 \
+ && echo $CTAGS_VERSION >ctags/.version
 
 FROM base AS dl-zstd
 ARG ZSTD_VERSION=1.5.7 \
@@ -136,22 +137,31 @@ RUN mkdir zstd \
  && tar xzf zstd-$ZSTD_VERSION.tar.gz -C zstd --strip-components=1
 
 FROM base AS dl-tugz
-ARG TUGZ_VERSION=1.1.0 \
-    TUGZ_SHA256=6bc79c91236353e95148dac68223b003e9b00daa6fb1c18d699a84feaeef2b2e
+ARG TUGZ_VERSION=1.3.0 \
+    TUGZ_SHA256=2ae62a9bebbe5d3f3426057068841fc0fad65a8fb1c2be231c3033979e8d7c2e
 WORKDIR /dl
 ADD --checksum=sha256:$TUGZ_SHA256 \
-    https://github.com/skeeto/tugz/releases/download/v$TUGZ_VERSION/tugz-amalgams-$TUGZ_VERSION.zip ./
-RUN 7z x tugz-amalgams-$TUGZ_VERSION.zip \
- && mv tugz-amalgams-$TUGZ_VERSION tugz
+    https://github.com/skeeto/tugz/releases/download/v$TUGZ_VERSION/tugz-$TUGZ_VERSION.tar.gz ./
+RUN mkdir tugz \
+ && tar xzf tugz-$TUGZ_VERSION.tar.gz -C tugz --strip-components=1
 
 FROM base AS dl-quilt
-ARG QUILT_VERSION=0.69.3 \
-    QUILT_SHA256=893973b92ca541d85b86a389a1ba43528ca48ec40e2b19b127c3660a4ffcfaed
+ARG QUILT_VERSION=0.69.4 \
+    QUILT_SHA256=21fd1d0a9710850cdde64f9fc5c8ebc42b7e3a34458bdf84dc04d9042d696541
 WORKDIR /dl
 ADD --checksum=sha256:$QUILT_SHA256 \
     https://github.com/skeeto/quilt.cpp/releases/download/v$QUILT_VERSION/quilt-$QUILT_VERSION.tar.gz ./
 RUN mkdir quilt \
  && tar xzf quilt-$QUILT_VERSION.tar.gz -C quilt --strip-components=1
+
+FROM base AS dl-u-config
+ARG U_CONFIG_VERSION=0.35.0 \
+    U_CONFIG_SHA256=2e42eb04ae1a5c6a3b02f9d7ef126895e24e35825b0d2690345806b21205d250
+WORKDIR /dl
+ADD --checksum=sha256:$U_CONFIG_SHA256 \
+    https://github.com/skeeto/u-config/releases/download/v$U_CONFIG_VERSION/u-config-$U_CONFIG_VERSION.tar.gz ./
+RUN mkdir u-config \
+ && tar xzf u-config-$U_CONFIG_VERSION.tar.gz -C u-config --strip-components=1
 
 FROM base AS dl-ccache
 ARG CCACHE_VERSION=4.14.1 \
@@ -166,6 +176,7 @@ ADD --checksum=sha256:$XXHASH_SHA256 \
     xxHash-$XXHASH_VERSION.tar.gz
 RUN mkdir ccache \
  && tar xJf ccache-$CCACHE_VERSION.tar.xz -C ccache --strip-components=1 \
+ && echo $CCACHE_VERSION >ccache/.version \
  && mkdir xxhash \
  && tar xzf xxHash-$XXHASH_VERSION.tar.gz -C xxhash --strip-components=1
 
@@ -189,8 +200,8 @@ RUN mkdir cmake \
  && tar xzf cmake-$CMAKE_VERSION.tar.gz -C cmake --strip-components=1
 
 FROM base AS dl-dcmake
-ARG DCMAKE_VERSION=1.7.1 \
-    DCMAKE_SHA256=9d7388088cd03fa7d47e287809f86eee28f02fa6f57bbffa2b556f70dcd8adf9
+ARG DCMAKE_VERSION=1.7.2 \
+    DCMAKE_SHA256=12f963d29c74d0b1e1f6d79a18b2b9a9797de89ced2ee94651d61abe974d757d
 WORKDIR /dl
 ADD --checksum=sha256:$DCMAKE_SHA256 \
     https://github.com/skeeto/dcmake/releases/download/v$DCMAKE_VERSION/dcmake-$DCMAKE_VERSION.tar.gz ./
@@ -207,8 +218,8 @@ RUN mkdir 7z \
  && tar xJf 7z$Z7_VERSION-src.tar.xz -C 7z
 
 FROM base AS dl-aas-sign
-ARG AAS_SIGN_VERSION=1.1.0 \
-    AAS_SIGN_SHA256=4ba127b0434f6e0f8af639e51a0c961e95b5adeb06391dd6ef02445e0b027c3f
+ARG AAS_SIGN_VERSION=1.1.1 \
+    AAS_SIGN_SHA256=5a3c5a7c351f645f69fddc8e5105ca7f7fa11bb97f89f14666c367b1a0f49dc7
 WORKDIR /dl
 ADD --checksum=sha256:$AAS_SIGN_SHA256 \
     https://github.com/skeeto/aas-sign/releases/download/v$AAS_SIGN_VERSION/aas-sign-$AAS_SIGN_VERSION.tar.gz ./
@@ -674,9 +685,26 @@ RUN ./configure \
 
 FROM cross AS build-quilt
 COPY --from=host-quilt /x-quilt/quilt.cpp /out/src/
+COPY --from=dl-quilt /dl/quilt/docs/quilt.1 /out/share/man/man1/
 RUN mkdir -p /out/bin \
  && $ARCH-g++ -std=c++20 -O2 -fno-exceptions -s \
         -o /out/bin/quilt.exe /out/src/quilt.cpp
+
+FROM cross AS build-u-config
+COPY --from=dl-u-config /dl/ /dl/
+
+WORKDIR /dl/u-config
+RUN make amalgamation \
+ && mkdir -p /out/bin /out/src /out/share/man/man1 \
+ && cp pkg-config.c /out/src/ \
+ && cp u-config.1 /out/share/man/man1/ \
+ && $ARCH-gcc \
+        -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
+        -s -nostdlib -o /out/bin/pkg-config.exe /out/src/pkg-config.c \
+        -lkernel32 \
+ && $ARCH-gcc -DEXE=pkg-config.exe -DCMD=pkg-config \
+        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
+        -o /out/bin/$ARCH-pkg-config.exe $PREFIX/src/alias.c -lkernel32
 
 # Build PDCurses once and reuse it for both gdb and ccmake.
 FROM cross AS build-pdcurses
@@ -731,8 +759,11 @@ RUN (cd /dl/gdb \
         CXXFLAGS="-O2 -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
         LDFLAGS="-s -L/deps/lib $LARGE_ADDRESS_FLAG" \
  && make MAKEINFO=true -j$(nproc) \
- && mkdir -p /out/bin \
- && cp gdb/.libs/gdb.exe gdbserver/gdbserver.exe /out/bin/
+ && mkdir -p /out/bin /out/share/man/man1 /out/share/man/man5 \
+ && cp gdb/.libs/gdb.exe gdbserver/gdbserver.exe /out/bin/ \
+ && cp /dl/gdb/gdb/doc/gdb.1 /dl/gdb/gdb/doc/gdbserver.1 \
+       /out/share/man/man1/ \
+ && cp /dl/gdb/gdb/doc/gdbinit.5 /out/share/man/man5/
 
 FROM cross AS build-make
 COPY --from=dl-make /dl/ /dl/
@@ -748,8 +779,9 @@ RUN (cd /dl/make \
         CFLAGS="-std=gnu17 -O2" \
         LDFLAGS="-s" \
  && make -j$(nproc) \
- && mkdir -p /out/bin \
+ && mkdir -p /out/bin /out/share/man/man1 \
  && cp make.exe /out/bin/ \
+ && cp /dl/make/doc/make.1 /out/share/man/man1/ \
  && $ARCH-gcc -DEXE=make.exe -DCMD=make \
         -Oz -fno-asynchronous-unwind-tables \
         -Wl,--gc-sections -s -nostdlib \
@@ -784,7 +816,7 @@ RUN $ARCH-gcc -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s \
       dc dd df diff dirname dos2unix du echo ed egrep env expand expr factor \
       false fgrep find fold free fsync getopt grep groups hd head hexdump \
       httpd iconv id inotifyd install ipcalc jn join kill killall \
-      lash less ln logname ls lsattr lzcat lzma lzop lzopcat md5sum mkdir \
+      lash less ln logname ls lsattr lzcat lzma lzop lzopcat man md5sum mkdir \
       mktemp mv nc nl nproc od paste patch pgrep pidof pipe_progress pkill \
       printenv printf ps pwd readlink realpath reset rev rm rmdir sed seq sh \
       sha1sum sha256sum sha3sum sha512sum shred shuf sleep sort split \
@@ -855,8 +887,9 @@ RUN make -j$(nproc) -C programs zstd \
         CC=$ARCH-gcc CFLAGS="-O2 $ZSTD_CLI_FLAGS" \
         LDFLAGS="-s $LARGE_ADDRESS_FLAG" EXT=.exe \
         $ZSTD_THREAD_FLAG \
- && mkdir -p /out/bin \
+ && mkdir -p /out/bin /out/share/man/man1 \
  && cp programs/zstd.exe /out/bin/ \
+ && cp programs/zstd.1 /out/share/man/man1/ \
  && $ARCH-gcc -DEXE=zstd.exe -DCMD=unzstd \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o /out/bin/unzstd.exe $PREFIX/src/alias.c -lkernel32
@@ -864,8 +897,11 @@ RUN make -j$(nproc) -C programs zstd \
 FROM cross AS build-tugz
 COPY --from=dl-tugz /dl/ /dl/
 
-WORKDIR /dl/tugz
-RUN mkdir -p /out/bin \
+WORKDIR /tugz
+RUN cmake -P /dl/tugz/cmake/amalgamate.cmake \
+ && mkdir -p /out/bin /out/share/man/man1 \
+ && cp /dl/tugz/man/gzip.1 /dl/tugz/man/unzip.1 /dl/tugz/man/zip.1 \
+       /out/share/man/man1/ \
  && printf '%s\n' gzip unzip zip \
     | xargs -I{} -P$(nproc) \
           $ARCH-gcc -O2 -nostartfiles -s $LARGE_ADDRESS_FLAG \
@@ -962,8 +998,9 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_EXE_LINKER_FLAGS="-s" \
         /dl/dcmake \
  && make -j$(nproc) \
- && mkdir -p /out/bin \
- && cp dcmake.exe /out/bin/
+ && mkdir -p /out/bin /out/share/man/man1 \
+ && cp dcmake.exe /out/bin/ \
+ && cp /dl/dcmake/docs/dcmake.1 /out/share/man/man1/
 
 FROM cross AS build-cmake
 COPY --from=dl-cmake /dl/ /dl/
@@ -1029,13 +1066,16 @@ RUN cmake -B /aas-sign-build-w32 -S /dl/aas-sign \
         -DCMAKE_RC_COMPILER=$ARCH-windres \
         -DCMAKE_EXE_LINKER_FLAGS="-s" \
  && cmake --build /aas-sign-build-w32 -j$(nproc) \
- && mkdir -p /out$PREFIX/bin \
- && cp /aas-sign-build-w32/aas-sign.exe /out$PREFIX/bin/
+ && mkdir -p /out$PREFIX/bin /out$PREFIX/share/man/man1 \
+ && cp /aas-sign-build-w32/aas-sign.exe /out$PREFIX/bin/ \
+ && cp /dl/aas-sign/aas-sign.1 /out$PREFIX/share/man/man1/
 
 FROM cross AS build-nsis
 COPY --from=dl-nsis /dl/nsis /dl/nsis
 COPY src/nsis/ $PREFIX/src/nsis/
 WORKDIR /dl/nsis
+# NSIS links makensis with -s only if a test program so linked runs,
+# which cannot happen when cross-compiling, so strip it after install.
 RUN QUILT_PATCHES=$PREFIX/src/nsis quilt push -a \
  && rm -rf .pc \
  && scons -j$(nproc) \
@@ -1050,7 +1090,8 @@ RUN QUILT_PATCHES=$PREFIX/src/nsis quilt push -a \
         SKIPUTILS="NSIS Menu,Makensisw,VPatch/Source/GenPat,MakeLangId,zip2exe" \
         ZLIB_W32=/deps \
         install-compiler install-stubs install-includes install-plugins \
-        install-contrib install-utils
+        install-contrib install-utils \
+ && $ARCH-strip /out$PREFIX/share/nsis/bin/makensis.exe
 
 # Also provide x86 stubs and plugins in the multilib kit so makensis
 # can produce 32-bit installers ("Target x86-unicode"). NSIS never
@@ -1100,6 +1141,36 @@ RUN if [ "$GCC_MULTILIB" = enable ]; then \
             install-stubs install-plugins ; \
     fi
 
+# Manual pages that need documentation tools to generate: ctags (docutils),
+# CMake (Sphinx), and ccache (asciidoctor). The tools stay in this stage.
+FROM base AS docs
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends \
+      asciidoctor python3-docutils python3-sphinx \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=dl-ctags /dl/ctags /dl/ctags
+COPY --from=dl-cmake /dl/cmake /dl/cmake
+COPY --from=dl-ccache /dl/ccache /dl/ccache
+RUN mkdir -p /out/share/man/man1 /out/share/man/man5 /out/share/man/man7 \
+ && version=$(cat /dl/ctags/.version) \
+ && for f in /dl/ctags/man/*.rst.in; do \
+        page=$(basename $f .rst.in) \
+     && case $page in readtags.1) continue;; esac \
+     && rst2man --syntax-highlight=none $f \
+        | sed -e s/@CTAGS_NAME_EXECUTABLE@/ctags/g \
+              -e s/@ETAGS_NAME_EXECUTABLE@/etags/g \
+              -e s/@VERSION@/$version/g \
+        >/out/share/man/man${page##*.}/$page ; \
+    done
+RUN VERBOSE=1 cmake -S /dl/cmake/Utilities/Sphinx -B /x-cmake-doc -DSPHINX_MAN=ON \
+ && VERBOSE=1 cmake --build /x-cmake-doc \
+ && rm /x-cmake-doc/man/cmake-gui.1 \
+ && cp /x-cmake-doc/man/*.1 /out/share/man/man1/ \
+ && cp /x-cmake-doc/man/*.7 /out/share/man/man7/
+WORKDIR /dl/ccache
+RUN bash doc/scripts/generate-manpage asciidoctor '' doc/ccache-doc.css \
+        $(cat .version) doc/manual.adoc /out/share/man/man1/ccache.1
+
 # Collect source tarballs
 FROM base AS source
 COPY --from=dl-cross /dl/*.* /source/
@@ -1112,6 +1183,7 @@ COPY --from=dl-ctags /dl/*.* /source/
 COPY --from=dl-zstd /dl/*.* /source/
 COPY --from=dl-tugz /dl/*.* /source/
 COPY --from=dl-quilt /dl/*.* /source/
+COPY --from=dl-u-config /dl/*.* /source/
 COPY --from=dl-ccache /dl/*.* /source/
 COPY --from=dl-ninja /dl/*.* /source/
 COPY --from=dl-cmake /dl/*.* /source/
@@ -1127,6 +1199,7 @@ ARG VERSION
 
 COPY --from=build-gendef /out/ $PREFIX/
 COPY --from=build-quilt /out/ $PREFIX/
+COPY --from=build-u-config /out/ $PREFIX/
 COPY --from=build-gdb /out/ $PREFIX/
 COPY --from=build-make /out/ $PREFIX/
 COPY --from=build-busybox /out/ $PREFIX/
@@ -1141,12 +1214,19 @@ COPY --from=build-cmake /out$PREFIX/ $PREFIX/
 COPY --from=build-7z /dl/7z/7z.sfx /7z/
 COPY --from=build-nsis /out$PREFIX/ $PREFIX/
 COPY --from=build-aas-sign-w32 /out$PREFIX/ $PREFIX/
+COPY --from=docs /out/ $PREFIX/
 
 COPY src $PREFIX/src
 COPY etc $PREFIX/etc
 
 WORKDIR /
-RUN rm -rf $PREFIX/share/man/ $PREFIX/share/info/ $PREFIX/share/gcc-*
+# Binutils installs pages for its ELF tools, which are removed above, and
+# some installs leave empty section directories (man3).
+RUN rm -rf $PREFIX/share/info/ $PREFIX/share/gcc-* \
+ && rm $PREFIX/share/man/man1/readelf.1 $PREFIX/share/man/man1/elfedit.1 \
+ && find $PREFIX/share/man -type d -empty -delete
+# Hand-written pages, and alias stubs replacing installed copies (g++.1)
+COPY man/man1/ $PREFIX/share/man/man1/
 COPY README.md Dockerfile w64devkit.ini $PREFIX/
 RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
  && $ARCH-windres -o w64devkit.o w64devkit.rc \
@@ -1157,10 +1237,6 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
         -Oz -fno-asynchronous-unwind-tables \
         -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/debugbreak.exe $PREFIX/src/debugbreak.c \
-        -lkernel32 \
- && $ARCH-gcc \
-        -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
-        -s -nostdlib -o $PREFIX/bin/pkg-config.exe $PREFIX/src/pkg-config.c \
         -lkernel32 \
  && $ARCH-gcc \
         -O2 -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
@@ -1174,9 +1250,6 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
         -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
         -s -nostdlib -o $PREFIX/bin/recycle.exe $PREFIX/src/recycle.c \
         -lkernel32 -lshell32 -lmemory \
- && $ARCH-gcc -DEXE=pkg-config.exe -DCMD=pkg-config \
-        -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
-        -o $PREFIX/bin/$ARCH-pkg-config.exe $PREFIX/src/alias.c -lkernel32 \
  && $ARCH-gcc -DEXE=../share/nsis/bin/makensis.exe -DCMD=makensis \
         -Oz -fno-asynchronous-unwind-tables -Wl,--gc-sections -s -nostdlib \
         -o $PREFIX/bin/makensis.exe $PREFIX/src/alias.c -lkernel32 \
@@ -1184,6 +1257,12 @@ RUN printf "id ICON \"$PREFIX/src/w64devkit.ico\"" >w64devkit.rc \
         -Oz -fno-asynchronous-unwind-tables -fno-builtin -Wl,--gc-sections \
         -s -nostdlib -o $PREFIX/bin/make2compdb.exe $PREFIX/src/make2compdb.c \
         -lkernel32 -lshell32 -lmemory \
+ && $ARCH-gcc -nostartfiles -O2 -s -o $PREFIX/bin/nroff.exe \
+        $PREFIX/src/nroff.c -lmemory \
+ && printf '.so man1/gcc.1\n' \
+        >$PREFIX/share/man/man1/gcc-$($ARCH-gcc -dumpversion).1 \
+ && ! grep -L -e '^\.TH' -e '^\.Dd' -e '^\.so ' $PREFIX/share/man/man*/* \
+      | grep . \
  && sed -i s/'\<ARCH\>'/$ARCH/g $PREFIX/etc/profile \
  && mkdir -p $PREFIX/lib/pkgconfig \
  && cp /dl/mingw/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt \
