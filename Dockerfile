@@ -136,8 +136,8 @@ RUN mkdir zstd \
  && tar xzf zstd-$ZSTD_VERSION.tar.gz -C zstd --strip-components=1
 
 FROM base AS dl-tugz
-ARG TUGZ_VERSION=1.0.0 \
-    TUGZ_SHA256=c21a61a06c1ab2ccbbf018fcbf8ec8144483021467fe65aeb7206d014b934dca
+ARG TUGZ_VERSION=1.1.0 \
+    TUGZ_SHA256=6bc79c91236353e95148dac68223b003e9b00daa6fb1c18d699a84feaeef2b2e
 WORKDIR /dl
 ADD --checksum=sha256:$TUGZ_SHA256 \
     https://github.com/skeeto/tugz/releases/download/v$TUGZ_VERSION/tugz-amalgams-$TUGZ_VERSION.zip ./
@@ -233,8 +233,10 @@ ENV ARCH=x86_64-w64-mingw32 \
     CRT_LIB32=enable \
     CRT_LIB64=enable \
     GCC_MANIFEST_FLAG="" \
+    LARGE_ADDRESS_FLAG="" \
     BUSYBOX_CONFIG=mingw64u_defconfig \
     ZSTD_THREAD_FLAG="" \
+    ZSTD_CLI_FLAGS=-DZSTDCLI_DECOMPRESS_WINDOWLOG=31 \
     CMAKE_WINNT_C_FLAGS="" \
     CMAKE_WINNT_CXX_FLAGS="" \
     NSIS_ARCH=amd64
@@ -246,8 +248,10 @@ ENV ARCH=i686-w64-mingw32 \
     CRT_LIB32=enable \
     CRT_LIB64=disable \
     GCC_MANIFEST_FLAG=--disable-win32-utf8-manifest \
+    LARGE_ADDRESS_FLAG=-Wl,--large-address-aware \
     BUSYBOX_CONFIG=mingw32w_defconfig \
     ZSTD_THREAD_FLAG=HAVE_THREAD=0 \
+    ZSTD_CLI_FLAGS="" \
     CMAKE_WINNT_C_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
     CMAKE_WINNT_CXX_FLAGS="-O2 -D_WIN32_WINNT=0x0601" \
     NSIS_ARCH=x86
@@ -416,7 +420,7 @@ RUN /dl/binutils/configure \
         --disable-nls \
         --with-static-standard-libraries \
         CFLAGS="-O2" \
-        LDFLAGS="-s" \
+        LDFLAGS="-s $LARGE_ADDRESS_FLAG" \
  && make MAKEINFO=true tooldir=$PREFIX -j$(nproc) \
  && make MAKEINFO=true tooldir=$PREFIX install \
  && rm $PREFIX/bin/dllwrap.exe $PREFIX/bin/elfedit.exe $PREFIX/bin/readelf.exe
@@ -569,7 +573,7 @@ RUN (cd /dl/gcc \
         LDFLAGS_FOR_TARGET="-s" \
         CFLAGS="-O2" \
         CXXFLAGS="-O2" \
-        LDFLAGS="-s" \
+        LDFLAGS="-s $LARGE_ADDRESS_FLAG" \
  && make -j$(nproc) \
  && make install \
  && rm -f $PREFIX/bin/ld.bfd.exe \
@@ -725,7 +729,7 @@ RUN (cd /dl/gdb \
         --enable-tui \
         CFLAGS="-std=gnu17 -O2 -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
         CXXFLAGS="-O2 -D__MINGW_USE_VC2005_COMPAT -DPDC_WIDE -I/deps/include" \
-        LDFLAGS="-s -L/deps/lib" \
+        LDFLAGS="-s -L/deps/lib $LARGE_ADDRESS_FLAG" \
  && make MAKEINFO=true -j$(nproc) \
  && mkdir -p /out/bin \
  && cp gdb/.libs/gdb.exe gdbserver/gdbserver.exe /out/bin/
@@ -836,6 +840,10 @@ RUN QUILT_PATCHES=$PREFIX/src/ctags quilt push -a \
 
 FROM cross AS build-zstd
 COPY --from=dl-zstd /dl/ /dl/
+COPY src/zstd/ $PREFIX/src/zstd/
+RUN cd /dl/zstd \
+ && QUILT_PATCHES=$PREFIX/src/zstd quilt push -a \
+ && rm -rf .pc
 
 WORKDIR /dl/zstd/lib
 RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libzstd.a \
@@ -844,7 +852,9 @@ RUN make -j$(nproc) CC=$ARCH-gcc AR=$ARCH-ar CFLAGS="-O2" libzstd.a \
 
 WORKDIR /dl/zstd
 RUN make -j$(nproc) -C programs zstd \
-        CC=$ARCH-gcc CFLAGS="-O2" LDFLAGS="-s" EXT=.exe $ZSTD_THREAD_FLAG \
+        CC=$ARCH-gcc CFLAGS="-O2 $ZSTD_CLI_FLAGS" \
+        LDFLAGS="-s $LARGE_ADDRESS_FLAG" EXT=.exe \
+        $ZSTD_THREAD_FLAG \
  && mkdir -p /out/bin \
  && cp programs/zstd.exe /out/bin/ \
  && $ARCH-gcc -DEXE=zstd.exe -DCMD=unzstd \
@@ -858,13 +868,18 @@ WORKDIR /dl/tugz
 RUN mkdir -p /out/bin \
  && printf '%s\n' gzip unzip zip \
     | xargs -I{} -P$(nproc) \
-          $ARCH-gcc -O2 -nostartfiles -s -o /out/bin/{}.exe {}.c -lmemory \
+          $ARCH-gcc -O2 -nostartfiles -s $LARGE_ADDRESS_FLAG \
+            -o /out/bin/{}.exe {}.c -lmemory \
  && printf '%s\n' gunzip zcat \
     | xargs -I{} -P$(nproc) \
           $ARCH-gcc -DEXE=gzip.exe -DCMD={} \
             -Oz -fno-asynchronous-unwind-tables \
             -Wl,--gc-sections -s -nostdlib \
-            -o /out/bin/{}.exe $PREFIX/src/alias.c -lkernel32
+            -o /out/bin/{}.exe $PREFIX/src/alias.c -lkernel32 \
+ && $ARCH-gcc -DEXE=unzip.exe -DCMD=zipinfo \
+        -Oz -fno-asynchronous-unwind-tables \
+        -Wl,--gc-sections -s -nostdlib \
+        -o /out/bin/zipinfo.exe $PREFIX/src/alias.c -lkernel32
 
 FROM cross AS build-ccache
 COPY --from=dl-ccache /dl/ /dl/
