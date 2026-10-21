@@ -2,6 +2,5 @@ avx-misaligned.patch
 dynamic-load-tzdb.patch
 libgfortran-mapview.patch
 trap-terminate.patch
-libstdcxx-implicit-string-inst.patch
 system-clock-y2038.patch
 align-double-locals.patch
